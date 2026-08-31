@@ -1,0 +1,39 @@
+# Author: Anna Korda
+# Verified locally (micromamba, linux-64) -- real import test passed for all
+# of luna, meeko, dimorphite-dl, loguru, rdkit, pymol, openbabel, biopython.
+# Python is 3.11, not 3.9 (luna-env's original choice) -- dimorphite-dl has
+# no published version supporting <3.10 at all, and luna itself declares
+# Requires-Python >=3.7,<4, so 3.11 was the safe way to satisfy both.
+# meeko is pinned to 0.7.1 (chemtools' tested version, not the latest 0.8.0)
+# to avoid untested new dependencies; it needs `gemmi`, which its own PyPI
+# metadata doesn't declare, hence the explicit pip entry below.
+# rdkit ends up pip-managed (not the conda-forge build) because
+# dimorphite-dl requires rdkit<2026, forcing a downgrade/reinstall via pip.
+#
+# Create with:
+#   conda env create -f environment.yml -p <path>/luna-chem
+name: luna-chem
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pymol-open-source
+  - openbabel
+  - biopython
+  - networkx
+  - numpy
+  - pandas
+  - scipy
+  - matplotlib
+  - seaborn
+  - pip
+  - pip:
+      - PDBeCif==1.5
+      - colorlog
+      - xopen
+      - mmh3==2.5.1
+      - luna==0.14.0
+      - meeko==0.7.1
+      - gemmi
+      - dimorphite-dl
+      - loguru
