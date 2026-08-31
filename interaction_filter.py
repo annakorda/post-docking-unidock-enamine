@@ -119,6 +119,15 @@ def _process_chunk(chunk_paths, chunk_idx, receptor_dir, receptor_id,
                                   # amend_mol's atom-count cross-check crash too, confirmed locally
         "calc_ifp": False,
         "out_pse": False,
+        "use_cache": True,       # build the receptor's own chemical-group perception ONCE
+                                  # from the first compound in this chunk, reuse it for the
+                                  # other 99 -- valid here because every compound in a chunk
+                                  # is docked into the same fixed box/pocket, so one cache
+                                  # covers them all. This is the real fix for the ~23s/compound
+                                  # throughput seen in the first production run: without it,
+                                  # LUNA redoes full receptor-neighborhood perception (expand_selection
+                                  # is hardcoded True internally, not something opts can disable)
+                                  # from scratch for every single compound.
         "nproc": None,           # serial inside -- parallelism is at the chunk level
         "inter_calc": InteractionCalculator(inter_filter=InteractionFilter.new_pli_filter()),
         "logging_enabled": True,
