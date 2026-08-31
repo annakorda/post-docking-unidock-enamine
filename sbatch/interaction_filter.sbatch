@@ -19,7 +19,8 @@ if [ -z "$CONFORMATION" ] || [ -z "$RECEPTOR_PDB" ]; then
     exit 1
 fi
 
-eval "$(/opt/miniconda3/bin/conda shell.bash hook)"
+module load Miniconda3/202601
+eval "$(conda shell.bash hook)"
 conda activate /users/gpcr/annak/ultra-large/envs/luna-chem
 
 python interaction_filter.py \
