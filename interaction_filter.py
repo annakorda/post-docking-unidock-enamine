@@ -33,6 +33,16 @@ import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
+# Module-level (not deferred into the worker like the rest of this file's
+# LUNA usage) because LigandOnlyProject below must be picklable by
+# EntryResults.save() -- a class defined inside a function has no resolvable
+# module path for pickle to find it by, which is a real error hit locally
+# ("Can't pickle local object ..."), not a theoretical concern.
+from luna.projects import LocalProject, EntryResults
+from luna.mol.entry import MolFileEntry
+from luna.interaction.filter import InteractionFilter
+from luna.interaction.calc import InteractionCalculator
+
 TARGET_RESNAME = "ASP"
 TARGET_RESNUM = 116
 PASS_TYPES = {"Ionic", "Salt bridge"}
@@ -70,6 +80,105 @@ def _check_one_compound(entry, entry_result):
     return False
 
 
+def _make_inter_calc():
+    calc = InteractionCalculator(inter_filter=InteractionFilter.new_pli_filter())
+    # LUNA's default computes the FULL interaction profile for every nearby
+    # atom-group pair -- hydrophobic, weak/halogen/chalcogen bonds, all three
+    # stacking types, repulsive, multipolar, ion-dipole, metal coordination,
+    # and a fully generic Atom-Atom vdW/proximal/clash check across every
+    # atom pair regardless of chemistry -- even though PASS_TYPES only ever
+    # needs Ionic and Salt bridge. Salt bridge is defined by LUNA as Ionic +
+    # a coincident Hydrogen bond between the same groups (confirmed in
+    # calc.py's dependent-interaction code), so Donor/Acceptor stays;
+    # everything else here is computed and then thrown away by our own
+    # filter regardless, so skip computing it in the first place.
+    calc.funcs = {
+        ("NegativelyIonizable", "PositivelyIonizable"): [calc.calc_ionic],
+        ("NegIonizable", "PosIonizable"): [calc.calc_ionic],
+        ("Negative", "Positive"): [calc.calc_ionic],
+        ("Donor", "Acceptor"): [calc.calc_hbond],
+    }
+    return calc
+
+
+class LigandOnlyProject(LocalProject):
+    """LUNA's own LocalProject._process_entry (projects.py) calls
+    calc_interactions(atm_grps_mngr.atm_grps) with no nb_atm_grps -- which
+    means BOTH sides of the pairwise interaction search default to the
+    entire cached neighborhood, receptor residues included, not just the
+    ligand. Confirmed by profiling a real local run: is_valid_pair alone
+    was ~30% of total runtime, called ~11,000+ times for a single ligand,
+    because LUNA was needlessly generating and filtering receptor-residue
+    to receptor-residue candidate pairs we never use -- we only ever check
+    the ligand's own contacts. This override (copied from LUNA's own
+    source, changed only where marked) passes just the ligand's own atom
+    groups as the search target, keeping the full neighborhood only as the
+    (already cached) thing being searched against. There's no `opts` hook
+    for this in the public LocalProject API, hence the subclass instead of
+    a config change."""
+
+    def _process_entry(self, entry):
+        start = time.time()
+        self._log("debug", "Starting entry processing: %s." % entry.to_string())
+        try:
+            if isinstance(entry, MolFileEntry) is False:
+                self._validate_entry_format(entry)
+
+            pkl_file = "%s/chunks/%s.pkl.gz" % (self.working_path, entry.to_string())
+            if self.append_mode and os.path.exists(pkl_file):
+                return
+
+            pdb_parser, structure, ligand = self._parse_complex(entry)
+            add_h = self._decide_hydrogen_addition(pdb_parser.get_header(), entry)
+
+            atm_grps_mngr = self._perceive_chemical_groups(entry, structure[0], ligand,
+                                                            add_h, self.cache)
+            atm_grps_mngr.entry = entry
+
+            # THE FIX (everything else in this method is copied verbatim
+            # from LUNA's own _process_entry): only the ligand's own
+            # groups as the search target.
+            ligand_grps = [g for g in atm_grps_mngr.atm_grps if ligand in g.compounds]
+
+            calc_func = self.inter_calc.calc_interactions
+            interactions_mngr = calc_func(ligand_grps, nb_atm_grps=atm_grps_mngr.atm_grps)
+            interactions_mngr.entry = entry
+
+            atm_grps_mngr.merge_hydrophobic_atoms(interactions_mngr)
+
+            if self.binding_mode_filter is not None:
+                interactions_mngr.filter_out_by_binding_mode(self.binding_mode_filter)
+
+            ifp = None
+            if self.calc_ifp:
+                ifp = self._create_ifp(atm_grps_mngr)
+            mfp = None
+            if self.calc_mfp:
+                mfp = self._create_mfp(entry)
+
+            entry_results = EntryResults(entry, atm_grps_mngr, interactions_mngr, ifp, mfp)
+            entry_results.save(pkl_file)
+
+            csv_file = "%s/results/interactions/%s.csv" % (self.working_path, entry.to_string())
+            interactions_mngr.to_csv(csv_file)
+
+            if self.out_pse:
+                from luna.interaction.view import InteractionViewer
+                pse_path = self.pse_path or "%s/results/pse/" % self.working_path
+                pse_file = "%s/%s.pse" % (pse_path, entry.to_string())
+                piv = InteractionViewer(add_directional_arrows=True)
+                piv.new_session([(entry, interactions_mngr, entry.pdb_file)], pse_file)
+
+            self._log("debug", "Processing of entry '%s' finished successfully."
+                      % entry.to_string())
+        except Exception:
+            self._log("debug", "Processing of entry '%s' failed." % entry.to_string())
+            raise
+
+        proc_time = time.time() - start
+        self._log("debug", "Processing of entry '%s' took %.2fs." % (entry.to_string(), proc_time))
+
+
 def _process_chunk(chunk_paths, chunk_idx, receptor_dir, receptor_id,
                     parts_dir_str, work_dir_str):
     parts_dir = Path(parts_dir_str)
@@ -77,14 +186,6 @@ def _process_chunk(chunk_paths, chunk_idx, receptor_dir, receptor_id,
     report_path = parts_dir / f"report_{chunk_idx:05d}.csv"
     if part_path.exists() and report_path.exists():
         return chunk_idx, None, None
-
-    # Imports deferred into the worker -- LUNA/RDKit/OpenBabel objects
-    # aren't picklable, so each ProcessPoolExecutor worker imports and
-    # builds its own project independently.
-    from luna.mol.entry import MolFileEntry
-    from luna.interaction.filter import InteractionFilter
-    from luna.interaction.calc import InteractionCalculator
-    import luna.projects
 
     work_dir = Path(work_dir_str) / f"chunk_{chunk_idx}"
     stage_dir = work_dir / "passing_sdfs"
@@ -129,14 +230,18 @@ def _process_chunk(chunk_paths, chunk_idx, receptor_dir, receptor_id,
                                   # is hardcoded True internally, not something opts can disable)
                                   # from scratch for every single compound.
         "nproc": None,           # serial inside -- parallelism is at the chunk level
-        "inter_calc": InteractionCalculator(inter_filter=InteractionFilter.new_pli_filter()),
-        "logging_enabled": True,
-        "verbosity": 1,
+        "inter_calc": _make_inter_calc(),
+        # logging_enabled=True writes a real log file to GPFS per operation --
+        # on a filesystem this whole project already proved has real per-file
+        # I/O latency problems (the MareNostrum redocking slowdown, earlier
+        # this session). Off, matching a known-fast reference LUNA script.
+        "logging_enabled": False,
+        "verbosity": 0,
     }
 
     rows = []
     try:
-        proj = luna.projects.LocalProject(**opts)
+        proj = LigandOnlyProject(**opts)
         proj.run()
 
         for entry in entries:
