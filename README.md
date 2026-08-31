@@ -70,11 +70,28 @@ Resumable and parallel (chunked `ProcessPoolExecutor`, same pattern as the
 rest of this project's large-file-count scripts) -- safe to re-run after a
 partial failure or timeout, already-done chunks are skipped.
 
+### Validated locally
+
+Tested against a real ligand (from `benchmarking/build/prepped_udt/`, a real
+formally-charged amine, `M CHG 1 6 1`) and the real `c5_capsfixed.pdb`
+receptor, with two controls: the ligand untouched (far from the receptor)
+vs. rigid-translated so its charged N sits 2.8A from the real Asp116 CG
+coordinate. Result: `negative_control` -> fail, `positive_control` -> pass,
+correctly. This also caught two real bugs neither code review nor the docs
+surfaced -- both fixed, both explained in the code comments where they're
+set:
+- `amend_mol=True` crashed against this receptor's known missing-sidechain
+  residues (`MoleculeSizeError`) -- now `False`.
+- `add_h=False` crashed for *every* MOL-file ligand, unrelated to the
+  receptor -- LUNA's `keep_hydrog = not add_h` (`groups.py:933`) means H
+  atoms leak into an internal atom count that's compared against a
+  heavy-atom-only count from `mol_obj`. Now `add_h=True, ph=7.4`, the only
+  path every LUNA tutorial actually exercises.
+
 ## Open items
 
-- **`--chunk_size` (default 100) hasn't been benchmarked for real** -- unlike
-  this project's pure file-copy chunking elsewhere, this is a real
-  per-compound LUNA interaction-calculation cost. Run a small chunk first
-  (e.g. the 15 sample ligands already pulled locally during AD4 spot-checks)
-  and time it before trusting the default at full scale.
+- **`--chunk_size` (default 100) hasn't been benchmarked at real scale** --
+  the local test above was 2 compounds; still need real per-compound timing
+  from an actual chunk of ~100 production poses before trusting the default
+  against the full ~1.9M-compound set.
 - `c1`'s AD4-redock tar is still mid-transfer as of this writing.

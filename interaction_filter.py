@@ -104,8 +104,19 @@ def _process_chunk(chunk_paths, chunk_idx, receptor_dir, receptor_id,
         "working_path": str(work_dir / "luna_proj"),
         "pdb_path": receptor_dir,
         "overwrite_path": True,
-        "add_h": False,          # poses already carry AD4's own protonation/charge state
-        "amend_mol": True,       # only affects receptor PDB het-residue perception, not our poses
+        # add_h=False looked safer on paper (trust AD4's own protonation) but is
+        # actually broken for external MOL-file ligands with explicit H: LUNA's
+        # AtomGroupPerceiver sets keep_hydrog = not add_h, and when keep_hydrog
+        # is True, its internal atom count includes H while mol_obj's heavy-atom
+        # count doesn't -- guaranteed MoleculeSizeError crash. Confirmed by an
+        # actual local run and by reading groups.py directly (not guessed).
+        # add_h=True is the only path every LUNA tutorial actually exercises.
+        "add_h": True,
+        "ph": 7.4,
+        "amend_mol": False,      # only affects receptor PDB het-residue perception, not our poses --
+                                  # and this receptor has residues with missing sidechain atoms
+                                  # (see prepare_receptor.sh's --allow_bad_res comment) that make
+                                  # amend_mol's atom-count cross-check crash too, confirmed locally
         "calc_ifp": False,
         "out_pse": False,
         "nproc": None,           # serial inside -- parallelism is at the chunk level
