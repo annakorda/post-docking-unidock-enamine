@@ -4,7 +4,7 @@
 #   e.g. sbatch sbatch/interaction_filter_fast.sbatch c5 /users/gpcr/annak/ultra-large/receptors/c5.pdb
 #SBATCH --job-name=interaction_filter_fast
 #SBATCH --partition=normal
-#SBATCH --cpus-per-task=64
+#SBATCH --cpus-per-task=32
 #SBATCH --time=04:00:00
 #SBATCH --output=logs/interaction_filter_fast_%j.out
 #SBATCH --error=logs/interaction_filter_fast_%j.err

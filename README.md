@@ -46,12 +46,44 @@ charge, distance to Asp116's CG, 5.0A). Pure RDKit, no receptor-wide
 interaction perception of any kind -- the whole check is one distance
 calculation per charged N atom found.
 
+Checks **every pose in the SDF, not just the first**. unidock's real
+defaults (`unidock --help`, confirmed, not assumed) are `--num_modes 9` and
+`--energy_range 3` (kcal/mol) -- AD4 redock output can hold up to 9 poses
+per compound, and every pose actually written is already guaranteed by
+unidock itself to be within 3 kcal/mol of the best-scored pose. A compound
+passes if *any* of its poses makes the contact, not just its top-ranked-by-
+score one -- verified with a real multi-pose test file where pose 1 alone
+would fail but pose 2 hits; the compound correctly passes, and the full
+multi-pose file is copied through untouched (both poses still present,
+byte-identical to the input).
+
 Molecules are parsed with `sanitize=False` and are **never modified**:
 no kekulization, no valence/aromaticity perception, no coordinate changes.
 Only the raw connection table (atoms, bonds, coordinates, formal charges
 from `M CHG` lines) is read. Compounds that pass are copied byte-for-byte
 (`shutil.copy2`) into the output tar -- verified locally with `diff` against
 the original file.
+
+**When a compound's winning pose isn't the first one in its SDF, that pose
+gets moved to the front** (pure text-level split on the `$$$$` delimiter and
+reassembly, no chemistry library involved -- if the split/rejoin doesn't
+reproduce the original file exactly, it falls back to a plain untouched
+copy rather than risk writing something wrong). Every individual pose's
+bytes stay identical; only their order changes, and only for compounds
+where it matters. Verified with a real multi-pose file (pose 1 alone would
+fail, pose 2 hits) -- the winning pose correctly ends up first, both poses
+still present and byte-identical to the original.
+
+**Pose selection is salt-bridge criterion first, best score second**: among
+a compound's poses, only those within 5.0A even qualify; the winner among
+*those* is whichever has the best (most negative) AD4 score (`ENERGY=` tag,
+same regex as `run_benchmark.py`/`extract_top_poses.py`, read from that
+specific pose's own text block so distance and score always belong to the
+same pose) -- not necessarily the geometrically closest one. Verified with
+a real 3-pose case: pose 1 fails geometry despite a deceptively good score,
+pose 2 is closer (2.0A) but scores worse (-5.0), pose 3 is farther (4.5A,
+still under the cutoff) but scores best (-9.0) -- the compound correctly
+picks pose 3, both in the ranking and in the reordered output file.
 
 Run via:
 ```
@@ -66,9 +98,18 @@ Output, per conformation, under `vs_results/interactions_passed_<conf>/`:
 - `interaction_filter_report_<conf>.csv` -- one row per compound
   (`compound_id, passed, error`), the real pass/fail/error record for
   every compound processed, not just the ones that passed.
+- `reordered_compounds_<conf>.csv` -- one row per compound whose winning
+  pose wasn't already first (`compound_id, winning_pose_index_0based,
+  distance_A`), so it's possible to check exactly which compounds and
+  which pose got picked.
+- `ranked_hits_<conf>.csv` -- every passing compound's winning-pose score,
+  **sorted best (most negative) first** (`rank, compound_id,
+  winning_pose_score`) -- the actual hit-priority list. Compounds whose
+  winning pose has no `ENERGY=` tag are excluded here (logged as a warning
+  with a real count) but still present in the full report.
 - `run_summary_<conf>.txt` -- human-readable summary written inside this
-  same folder: starting compound count, pass/fail/error counts, the exact
-  criterion and receptor coordinate used, output file sizes.
+  same folder: starting compound count, pass/fail/error/reordered counts,
+  the exact criterion and receptor coordinate used, output file sizes.
 
 Resumable and parallel (chunked `ProcessPoolExecutor`, same pattern as the
 rest of this project's large-file-count scripts) -- safe to re-run after a
@@ -105,4 +146,5 @@ replaces it.
 
 ## Open items
 
-- `c1`'s AD4-redock tar is still mid-transfer as of this writing.
+None currently -- c1/ref1/c5 AD4-redock tars all extracted and receptors
+built for all three conformations.
