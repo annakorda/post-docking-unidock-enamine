@@ -1,0 +1,31 @@
+References -- rationale for the Asp116 salt-bridge distance criterion used
+by interaction_filter_fast.py (charged N to Asp116 CG carbon, 5.0A cutoff)
+
+1. Barlow, D.J.; Thornton, J.M. "Ion-pairs in proteins."
+   Journal of Molecular Biology, 1983, 168(4), 867-885.
+   DOI: 10.1016/S0022-2836(83)80079-5
+   PMID: 6887253
+   -- Seminal reference establishing the <=4A distance criterion for ion
+   pairs in proteins, derived from 38 real protein structures. Same paper
+   LUNA's own Ionic interaction default (max_dist_attract_inter, 6A) cites.
+   Our own cutoff (5.0A) is intentionally more permissive than this paper's
+   4A, matching this project's prior analyze_asp_contact.py value, not a
+   direct reproduction of Barlow & Thornton's own number.
+
+2. Shi, L.; Javitch, J.A. "The Binding Site of Aminergic G Protein-Coupled
+   Receptors: The Transmembrane Segments and Second Extracellular Loop."
+   Annual Review of Pharmacology and Toxicology, 2002, 42, 437-467.
+   DOI: 10.1146/annurev.pharmtox.42.091101.144224
+   -- Directly relevant to this target class: describes the salt bridge
+   between a biogenic amine ligand's protonated amine and the conserved
+   Asp (Asp3.32 in standard GPCR numbering, Asp116 in this receptor's own
+   numbering) as essential and conserved across every aminergic GPCR
+   identified, canonical distance under 4A.
+
+3. "Salt Bridges in Proteins: The Invisible Anchors."
+   sdrfoundation.org (general web article, not a peer-reviewed journal --
+   no DOI). https://sdrfoundation.org/salt-bridges-protein-stability
+   -- Corroborating general-audience source, confirms measuring salt-bridge
+   distance from the carboxylate CARBON (not the oxygens) to the amine
+   nitrogen is an established, real convention, matching what we measure
+   to (Asp116's CG) rather than an OD1/OD2-based point.
