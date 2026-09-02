@@ -144,7 +144,60 @@ the ligand's own atom groups instead of the whole cached neighborhood) --
 at ~1.9M compounds that doesn't finish in a reasonable time. This script
 replaces it.
 
+## strain_filter.py (second filter stage, runs after interaction_filter_fast.py)
+
+Filters salt-bridge-passing compounds by conformational strain, using the
+real method from Gu, Smith, Yang, Irwin, Shoichet, "Ligand Strain Energy in
+Large Library Docking," JCIM 2021 (full citation +
+[interaction_filter_references.txt](interaction_filter_references.txt))
+-- independently reimplemented (`torsion_lib.py`) from their paper and
+public source since their repo has no license, and verified against their
+own published reference output on 3 real molecules to floating-point
+precision before use. Uses their real, openly-distributed torsion-library
+data file (`data/TL_2.1_VERSION_6.xml`, unmodified) -- this is the
+precomputed statistical result of their Cambridge Structural Database
+analysis, so no CSD access of our own is needed.
+
+Checks the exact same winning pose interaction_filter_fast.py already
+selected per compound (salt bridge first, best AD4 score among qualifying
+poses second) -- never re-opens pose selection at this stage. A compound
+is "strained" (filtered out) if `total_TEU >= 7.0 OR single_TEU >= 1.8`,
+the paper's own general-purpose default (from their 40-target DUD-E
+benchmark average) -- no serotonin receptor is in DUD-E, so this isn't
+calibrated to our target specifically; their real dopamine D4 case study
+(the closer aminergic-GPCR analog, same conserved Asp3.32 architecture)
+used Total>=6.0/Single>=1.8 from real experimental hit-rate data, which
+nearly doubled hit rate (24.2% -> 34.0%) at the cost of discarding 60% of
+compounds -- worth revisiting if the DUD-E-general default doesn't behave
+well on our own real numbers.
+
+Molecules are never modified -- the torsion library's SMARTS use lowercase
+aromatic atoms (`[cX3]`, `[n]`), which need RDKit's aromaticity perception
+to match; our SDFs are Kekulized (no file-level aromatic bond type, unlike
+the paper's own mol2 input) so a *partial* sanitization (ring perception +
+aromaticity only, no valence/H changes) is applied to an in-memory copy --
+verified coordinates/charges/atom-count stay byte-identical, and that this
+step is a no-op on already-aromatic-flagged input (their own mol2 test
+data reproduced identical numbers with or without it).
+
+Run via:
+```
+sbatch sbatch/strain_filter.sbatch <conformation> --dry_run   # counts only, no survivors tar
+sbatch sbatch/strain_filter.sbatch <conformation>              # writes strain_filtered_<conf>.tar.gz
+```
+Output under `vs_results/strain_filtered_<conf>/`: `strain_filter_report_<conf>.csv`
+(compound_id, total_TEU, single_TEU, flagged, n_torsions, strained, error),
+`run_summary_<conf>.txt`, and (non-dry-run) `strain_filtered_<conf>.tar.gz`
+-- the compounds that passed *both* filters, same flat/untouched-file
+convention as interaction_filter_fast.py's own output.
+
+**Real result on c1's top-10 ranked hits**: 9 of 10 flagged strained at the
+default thresholds -- a real, substantial cut, not noise. Matches the
+paper's own documented pattern: a high-scoring docked pose can achieve
+that score *by* adopting a strained conformation (their Figures 3/5/8 show
+real examples of exactly this).
+
 ## Open items
 
-None currently -- c1/ref1/c5 AD4-redock tars all extracted and receptors
-built for all three conformations.
+- Real full-scale counts (via `--dry_run`) not yet run for any conformation
+  as of this writing -- the numbers above are from a 10-compound sample.
