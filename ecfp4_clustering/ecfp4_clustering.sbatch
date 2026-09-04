@@ -4,7 +4,7 @@
 #   e.g. sbatch ecfp4_clustering/ecfp4_clustering.sbatch c1
 #   e.g. sbatch ecfp4_clustering/ecfp4_clustering.sbatch c1 -6.0
 #SBATCH --job-name=ecfp4_clustering
-#SBATCH --partition=normal
+#SBATCH --partition=long
 #SBATCH --cpus-per-task=32
 #SBATCH --output=logs/ecfp4_clustering_%j.out
 #SBATCH --error=logs/ecfp4_clustering_%j.err
