@@ -4,7 +4,7 @@
 #   e.g. sbatch hit_overlap/hit_overlap.sbatch
 #   e.g. sbatch hit_overlap/hit_overlap.sbatch -6.0
 #SBATCH --job-name=hit_overlap
-#SBATCH --partition=normal
+#SBATCH --partition=long
 #SBATCH --cpus-per-task=2
 #SBATCH --output=logs/hit_overlap_%j.out
 #SBATCH --error=logs/hit_overlap_%j.err

@@ -4,7 +4,7 @@
 #   e.g. sbatch snn_similarity/snn_similarity.sbatch
 #   e.g. sbatch snn_similarity/snn_similarity.sbatch -6.0
 #SBATCH --job-name=snn_similarity
-#SBATCH --partition=normal
+#SBATCH --partition=long
 #SBATCH --cpus-per-task=32
 #SBATCH --output=logs/snn_similarity_%j.out
 #SBATCH --error=logs/snn_similarity_%j.err
