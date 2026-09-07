@@ -27,8 +27,37 @@ throwaway working directory, deleted immediately after its result is parsed
 -- at 228,839 compounds that's ~850GB / ~1.6M inodes if ever kept, so nothing
 survives except the one real number (`TOTAL`, the MM-GBSA delta G) pulled out
 of each compound's result CSV. Use `--scratch_root` to point this at
-node-local storage, not shared GPFS (the sbatch script already does this via
-`$TMPDIR`).
+genuinely node-local storage.
+
+**Real gotcha, found on the first production run**: a real 64-worker run on
+shiva sat for 70+ minutes with zero compounds completed. `ps` on the compute
+node showed real work happening (pdb2gmx/gmx_MMPBSA/unigbsa-pipeline
+processes spanning the whole runtime) but many stuck in D (disk-wait) state,
+accumulating only ~20-30s of actual CPU time after 45-70+ minutes of
+wall-clock existence. `/tmp` on that node turned out to be real local disk
+(`df`/`mount` confirmed it's on the node's own LVM volume, not network
+storage), so it wasn't our own per-compound file churn saturating a slow
+filesystem. The real cause, found by reading `unigbsa`'s own source
+(`gbsarun.py`): every `gmx_MMPBSA` invocation does a real per-process OpenMPI
+singleton init via `mpi4py`'s `MPI.COMM_WORLD` (including a blocking
+`Barrier()`) *even without `mpirun`* -- 64 of those initializing at once on
+one node is almost certainly the actual contention, not disk I/O.
+
+Fix (both sbatch scripts): `--workers` is no longer tied 1:1 to
+`--cpus-per-task=64` -- it now defaults to a separate, much lower 16 (3rd
+CLI arg, tune from there), keeping the full core allocation as headroom
+rather than saturating it with simultaneous MPI inits. Also sets
+`OMPI_MCA_btl=self` (no real inter-process transport needed for a 1-rank
+job) and points OpenMPI's own session directory at `/dev/shm` instead of
+wherever `/tmp` resolves. Our own per-compound scratch dirs also moved to
+`/dev/shm` regardless (RAM-backed, always genuinely node-local; the real
+footprint here -- ~3.7MB x up to `--workers` concurrent -- is trivial for
+RAM either way).
+
+**Not yet re-verified against a real full-scale run** -- this fix is
+grounded in the source code (confirmed real mechanism) but the actual
+throughput at `--workers 16` hasn't been measured yet. Try a real run and
+check `ps`/progress logs before trusting the numbers above at this setting.
 
 ## Environment
 
