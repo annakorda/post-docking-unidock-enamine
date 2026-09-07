@@ -8,56 +8,50 @@ matching Uni-GBSA's own validated default). Runs on top of
 `receptor_prep/`'s gmx-ready receptors and `apply_score_cutoff.py`'s already-
 built `final_hits_<conf>_cutoff<C>.csv` + `_partNN.sdf`.
 
-## Real benchmark (not estimated)
+## Real benchmark, and why this only scores the top 1%
 
-Timed 12 real compounds across all 3 receptors (c1, ref1, c5): consistently
-**~25 seconds wall-clock per compound**, and essentially single-threaded
-internally (`-nt 1`, `-nt 2`, and `-nt 8` all measured ~110-120% CPU) -- more
-threads per compound don't help, so the real lever is running many compounds
-as **separate concurrent processes**, which is what this script does
-(`ProcessPoolExecutor` across `--workers`, not one job with many threads).
+Per-compound cost is genuinely higher on shiva than a fast local machine --
+measured directly (not estimated): **~65-72s/compound on shiva** at
+low concurrency vs ~25-32s locally, for the identical code and receptor.
+On top of that, real concurrency-scaling cost was measured directly on shiva
+(same node, same code, only worker count changed):
 
-Real compound counts (cutoff -7.0): c1 = 106,380, ref1 = 51,195, c5 = 71,264,
-**228,839 total**. At ~25s/compound on 64 concurrent workers:
-`228,839 x 25s / 64 ~= 24.8 hours` -- about 1 day, matching the original
-target.
+| workers | mean s/compound | slowdown |
+|---|---|---|
+| 1 | 72.2 | 1.00x |
+| 4 | 75.9 | 1.06x |
+| 8 | 90.7 | 1.29x |
+| 16 | 120.8 | 1.72x |
+
+That's a real, gradual, measured curve, not a guess -- it also means an
+earlier attempt to run this at 64 workers correctly stalled hard (many
+`gmx_MMPBSA`/`unigbsa-pipeline` processes stuck in D/disk-wait state,
+accumulating only ~20-30s of CPU time after 45-70+ min of wall-clock
+existence). At this real cost, the full ~106k-230k compound sets aren't
+practical here.
+
+**Fix: only score the top `--top_pct` by AD4 rank** (default 1%, a
+real contiguous prefix of the already-rank-ordered
+`final_hits_<conf>_cutoff<C>.csv` -- no re-sorting needed). That's a small,
+bounded, real set per conformation: c1 ~1,064, ref1 ~512, c5 ~713 -- already
+the most interesting compounds (best AD4-ranked), and at even the slower
+16-worker rate (1.72x), c1's ~1,064 compounds is ~1,064 x 72s x 1.72 / 16
+=~ 2.3 hours, not days.
+
+`--workers` defaults to 16 (not tied to `--cpus-per-task=32`) as a real,
+measured middle ground -- tune via the 4th CLI arg if a given run still
+looks slow (check with `ps aux | grep unigbsa-pipeline` on the compute node
+and watch whether CPU time tracks wall-clock time). `OMPI_MCA_btl=self` and
+moving OpenMPI's own session directory to `/dev/shm` are also set (harmless,
+possibly-contributing mitigations for the real per-process OpenMPI
+singleton-init `unigbsa` does internally via `mpi4py`), though the measured
+curve above shows the degradation is gradual rather than a hard wall, so
+these aren't confirmed as the primary fix on their own.
 
 Each compound writes ~7 files / ~3.7MB (without `--verbose`) to its own
-throwaway working directory, deleted immediately after its result is parsed
--- at 228,839 compounds that's ~850GB / ~1.6M inodes if ever kept, so nothing
-survives except the one real number (`TOTAL`, the MM-GBSA delta G) pulled out
-of each compound's result CSV. Use `--scratch_root` to point this at
-genuinely node-local storage.
-
-**Real gotcha, found on the first production run**: a real 64-worker run on
-shiva sat for 70+ minutes with zero compounds completed. `ps` on the compute
-node showed real work happening (pdb2gmx/gmx_MMPBSA/unigbsa-pipeline
-processes spanning the whole runtime) but many stuck in D (disk-wait) state,
-accumulating only ~20-30s of actual CPU time after 45-70+ minutes of
-wall-clock existence. `/tmp` on that node turned out to be real local disk
-(`df`/`mount` confirmed it's on the node's own LVM volume, not network
-storage), so it wasn't our own per-compound file churn saturating a slow
-filesystem. The real cause, found by reading `unigbsa`'s own source
-(`gbsarun.py`): every `gmx_MMPBSA` invocation does a real per-process OpenMPI
-singleton init via `mpi4py`'s `MPI.COMM_WORLD` (including a blocking
-`Barrier()`) *even without `mpirun`* -- 64 of those initializing at once on
-one node is almost certainly the actual contention, not disk I/O.
-
-Fix (both sbatch scripts): `--workers` is no longer tied 1:1 to
-`--cpus-per-task=64` -- it now defaults to a separate, much lower 16 (3rd
-CLI arg, tune from there), keeping the full core allocation as headroom
-rather than saturating it with simultaneous MPI inits. Also sets
-`OMPI_MCA_btl=self` (no real inter-process transport needed for a 1-rank
-job) and points OpenMPI's own session directory at `/dev/shm` instead of
-wherever `/tmp` resolves. Our own per-compound scratch dirs also moved to
-`/dev/shm` regardless (RAM-backed, always genuinely node-local; the real
-footprint here -- ~3.7MB x up to `--workers` concurrent -- is trivial for
-RAM either way).
-
-**Not yet re-verified against a real full-scale run** -- this fix is
-grounded in the source code (confirmed real mechanism) but the actual
-throughput at `--workers 16` hasn't been measured yet. Try a real run and
-check `ps`/progress logs before trusting the numbers above at this setting.
+throwaway working directory, deleted immediately after its result is parsed.
+Use `--scratch_root` to point this at genuinely node-local storage (`/dev/shm`
+in the sbatch scripts).
 
 ## Environment
 
@@ -92,10 +86,10 @@ sbatch mmgbsa_rescore/mmgbsa_rescore.sbatch ref1
 sbatch mmgbsa_rescore/mmgbsa_rescore.sbatch c5
 ```
 
-64 cores, `--partition=long`, no time limit, resumable (skips chunks whose
-output already exists), logs real periodic progress with ETA (throttled to
-~100 log lines total regardless of compound count, so c1's ~5,300 chunks
-don't spam the log).
+Top 1% by AD4 rank (default, override with a 2nd CLI arg), 16 workers
+(default, override with a 4th CLI arg), `--partition=long`, resumable
+(skips chunks whose output already exists), logs real periodic progress
+with ETA.
 
 Output per conformation, under `analysis_results/mmgbsa_rescore/mmgbsa_<conf>/`:
 - `mmgbsa_results_<conf>.csv` -- every compound that succeeded, ranked by
@@ -117,13 +111,13 @@ Output per conformation, under `analysis_results/mmgbsa_rescore/mmgbsa_<conf>/`:
 ## `mmgbsa_save_top_complexes.py` (run after the above, per conformation)
 
 `mmgbsa_rescore.py` keeps only the delta G per compound -- its minimized
-complex is deleted right after scoring, since keeping all ~230k would be
-~850GB. This script re-runs unigbsa-pipeline for just the top `--top_pct`
-percent (default 1%) of the already-ranked `mmgbsa_results_<conf>.csv` and
-this time keeps `complex.pdb` (the real minimized protein+ligand structure,
-confirmed by atom count -- all standard residues + ACE/NME caps + the ligand
-as `MOL`). A real, small, bounded re-run: 1% of c1/ref1/c5's full sets is
-~1,064 / ~512 / ~713 compounds, not a second full-scale pass.
+complex is deleted right after scoring. This script re-runs unigbsa-pipeline
+for just the top `--top_pct` percent (default 1%) of the already-ranked
+`mmgbsa_results_<conf>.csv` and this time keeps `complex.pdb`. **Note**: now
+that `mmgbsa_rescore.py` itself already only scores the top 1% by AD4 rank,
+this script's default top 1% is 1% *of that* (~10-11 compounds/conformation)
+-- pass a higher `--top_pct` (e.g. 50 or 100) if you want structures for
+more of the already-small MM-GBSA-scored set.
 
 ```
 sbatch mmgbsa_rescore/mmgbsa_save_top_complexes.sbatch c1

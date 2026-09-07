@@ -33,6 +33,7 @@ Usage:
 """
 import argparse
 import csv
+import math
 import os
 import shutil
 import subprocess
@@ -64,7 +65,7 @@ def _split_sdf_blocks(text):
     return blocks
 
 
-def load_hits(vs_results_dir, conf, cutoff):
+def load_hits(vs_results_dir, conf, cutoff, top_pct=None):
     hit_dir = Path(vs_results_dir) / f"final_hits_{conf}_cutoff{cutoff:g}"
     csv_path = hit_dir / f"final_hits_{conf}_cutoff{cutoff:g}.csv"
     if not csv_path.is_file():
@@ -87,6 +88,13 @@ def load_hits(vs_results_dir, conf, cutoff):
     if len(blocks) != len(ids):
         raise SystemExit(f"{conf}: {len(ids)} CSV rows but {len(blocks)} SDF blocks -- "
                           f"expected the same rank order, refusing to guess a correspondence")
+
+    if top_pct is not None:
+        # rows are already rank-ordered best AD4 score first (apply_score_cutoff.py's own
+        # guarantee), so the top N% is just a contiguous prefix -- no re-sorting needed
+        n_top = max(1, math.ceil(len(ids) * top_pct / 100.0))
+        ids, blocks = ids[:n_top], blocks[:n_top]
+
     return ids, blocks, other_info
 
 
@@ -124,7 +132,7 @@ def _process_chunk(args):
     out_dir = Path(out_dir_str)
     part_path = out_dir / f"mmgbsa_part_{chunk_idx:05d}.csv"
     if part_path.exists():
-        return chunk_idx, len(chunk)
+        return chunk_idx, len(chunk), True  # resumed from a prior run -- not real new work
 
     rows = []
     for compound_id, block in chunk:
@@ -138,7 +146,7 @@ def _process_chunk(args):
         w = csv.DictWriter(f, fieldnames=FIELDNAMES)
         w.writeheader()
         w.writerows(rows)
-    return chunk_idx, len(chunk)
+    return chunk_idx, len(chunk), False
 
 
 def main():
@@ -148,6 +156,9 @@ def main():
     ap.add_argument("--receptor", required=True, help="gmx-ready receptor PDB from receptor_prep/")
     ap.add_argument("--out_dir", required=True)
     ap.add_argument("--cutoff", type=float, default=-7.0)
+    ap.add_argument("--top_pct", type=float, default=None,
+                     help="only score the top N%% by AD4 rank (contiguous prefix, already "
+                          "rank-ordered) -- omit to score the full set")
     ap.add_argument("--chunk_size", type=int, default=20,
                      help="compounds per work-chunk -- small, since each compound is its own "
                           "~25s subprocess and chunks are the resume granularity")
@@ -169,8 +180,9 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     workers = args.workers or len(os.sched_getaffinity(0))
 
-    log(f"Loading {conf} hits (cutoff {args.cutoff:g}) ...")
-    ids, blocks, other_info = load_hits(args.vs_results_dir, conf, args.cutoff)
+    top_label = f", top {args.top_pct:g}%" if args.top_pct is not None else ""
+    log(f"Loading {conf} hits (cutoff {args.cutoff:g}{top_label}) ...")
+    ids, blocks, other_info = load_hits(args.vs_results_dir, conf, args.cutoff, args.top_pct)
     n_total = len(ids)
     log(f"{n_total:,} compounds loaded for {conf}, receptor={receptor_path}, workers={workers}")
 
@@ -191,22 +203,26 @@ def main():
 
     t0 = time.time()
     done_count = 0
+    new_done_count = 0  # excludes resumed (instant, not real work) chunks -- rate/ETA use only this
     done_compounds = have * args.chunk_size
     with ProcessPoolExecutor(max_workers=workers) as pool:
         futures = {pool.submit(_process_chunk, t): t[1] for t in tasks}
         for fut in as_completed(futures):
-            chunk_idx, n_in_chunk = fut.result()
+            chunk_idx, n_in_chunk, was_resumed = fut.result()
             done_count += 1
             done_compounds += n_in_chunk
+            if not was_resumed:
+                new_done_count += 1
             if done_count % log_every == 0 or done_count == n_chunks:
                 elapsed = time.time() - t0
-                rate = done_count / elapsed if elapsed > 0 else 0
+                rate = new_done_count / elapsed if elapsed > 0 else 0
                 eta_s = (n_chunks - done_count) / rate if rate else float("inf")
                 pct = 100 * done_count / n_chunks
                 log(f"  chunk {done_count:,}/{n_chunks:,} ({pct:.1f}%) done -- "
                     f"~{done_compounds:,}/{n_total:,} compounds -- "
-                    f"{elapsed / 60:.1f} min elapsed, ETA {eta_s / 60:.1f} min "
-                    f"({eta_s / 3600:.1f} h)")
+                    f"{elapsed / 60:.1f} min elapsed ({new_done_count:,} chunks actually computed "
+                    f"this run, {done_count - new_done_count:,} resumed instantly) -- "
+                    f"ETA {eta_s / 60:.1f} min ({eta_s / 3600:.1f} h)")
 
     log("all chunks done -- merging ...")
     all_rows = []
