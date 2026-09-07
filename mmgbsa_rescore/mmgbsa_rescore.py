@@ -204,7 +204,9 @@ def main():
     t0 = time.time()
     done_count = 0
     new_done_count = 0  # excludes resumed (instant, not real work) chunks -- rate/ETA use only this
-    done_compounds = have * args.chunk_size
+    done_compounds = 0  # every chunk (resumed or new) passes through the loop below exactly
+    # once, so this is the sole accumulator -- no separate have-based pre-seed (that
+    # double-counted resumed chunks, since they're also counted as they "complete" below)
     with ProcessPoolExecutor(max_workers=workers) as pool:
         futures = {pool.submit(_process_chunk, t): t[1] for t in tasks}
         for fut in as_completed(futures):
