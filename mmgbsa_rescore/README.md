@@ -85,6 +85,28 @@ Output per conformation, under `analysis_results/mmgbsa_rescore/mmgbsa_<conf>/`:
   hits all had AD4 ranks within 1-10 too -- a reordering within the already-
   good set, not noise.)
 
+## `mmgbsa_save_top_complexes.py` (run after the above, per conformation)
+
+`mmgbsa_rescore.py` keeps only the delta G per compound -- its minimized
+complex is deleted right after scoring, since keeping all ~230k would be
+~850GB. This script re-runs unigbsa-pipeline for just the top `--top_pct`
+percent (default 1%) of the already-ranked `mmgbsa_results_<conf>.csv` and
+this time keeps `complex.pdb` (the real minimized protein+ligand structure,
+confirmed by atom count -- all standard residues + ACE/NME caps + the ligand
+as `MOL`). A real, small, bounded re-run: 1% of c1/ref1/c5's full sets is
+~1,064 / ~512 / ~713 compounds, not a second full-scale pass.
+
+```
+sbatch mmgbsa_rescore/mmgbsa_save_top_complexes.sbatch c1
+sbatch mmgbsa_rescore/mmgbsa_save_top_complexes.sbatch ref1
+sbatch mmgbsa_rescore/mmgbsa_save_top_complexes.sbatch c5
+```
+
+Output under `analysis_results/mmgbsa_rescore/mmgbsa_<conf>/top_complexes/`:
+`complexes/<compound_id>_complex.pdb` (one per selected compound) and
+`top_complexes_manifest_<conf>.csv` (rank, compound_id, mmgbsa_dg, ad4_score,
+path to its complex.pdb).
+
 ## Combining AD4 + MM-GBSA into one score (open item)
 
 Not yet implemented -- deliberately, since Anna asked to run the real thing
