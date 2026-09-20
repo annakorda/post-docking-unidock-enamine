@@ -28,5 +28,5 @@ python ecfp4_clustering/ecfp4_clustering.py \
     --vs_results_dir "/users/gpcr/annak/ultra-large/vs_results" \
     --out_dir "/users/gpcr/annak/ultra-large/analysis_results/ecfp4_clustering" \
     --cutoff "$CUTOFF" \
-    --thresholds 0.90,0.85,0.80,0.75,0.70 \
+    --thresholds 0.90,0.85,0.80,0.75,0.70,0.65,0.60,0.55,0.50,0.45,0.40,0.35 \
     --workers "$SLURM_CPUS_PER_TASK"
