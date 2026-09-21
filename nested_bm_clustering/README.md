@@ -51,6 +51,12 @@ so no internal-consistency check applies) get their own rule: z<=-3.0
 
 ![Q5](q5/q5_visualization.png)
 
+Tc=0.60 is a decision, not an automatic pick: within the Q1 range,
+trustworthy/good counts stayed flat across Tc=0.45-0.65 for all 3
+conformations, and 0.60 was chosen as the middle of that stable stretch.
+`q5_mmgbsa_input_list.py` and `q_singletons.py` hardcode `TC = "0.60"` --
+re-run Q1-Q4 and re-check this choice before trusting it on different data.
+
 **Final, Tc=0.60:**
 
 | | clusters kept | total compounds |
