@@ -1,15 +1,11 @@
-# post-docking-unidock-enamine
+# Post-docking-unidock-enamine
 
 Post-docking analysis for the 5-HT1A ultra-large screen (Enamine REAL Space,
 ~192M compounds vs. conformations c1/ref1/c5, docked+AD4-redocked on CINECA
-and MareNostrum). Runs on Barcelona (`shiva`) only, against results copied
-over from both clusters.
-
+and MareNostrum). 
 ## The filtering funnel, in order
 
-Each step runs on the previous step's own output and never re-opens an
-earlier step's decision (e.g. strain filtering never re-picks which pose
-"won" -- that was already decided by the interaction filter).
+Each step runs on the previous step's own output.
 
 Steps 0-2 run in a separate repo (library prep, before any docking).
 Steps 3-8 are this repo.
@@ -36,9 +32,7 @@ only (M and U dropped), PAINS filtered out, Tanimoto <0.35 to all of
 
 Row 4 is the single biggest cut in this repo: strain filtering removes
 ~93-95% of what the salt-bridge filter alone passed (e.g. c1:
-1,780,753 -> 117,404), consistent with the paper's own finding that a
-high-scoring docked pose can get that score *by* adopting a strained
-conformation.
+1,780,753 -> 117,404).
 
 ## Where the data lives
 
@@ -55,15 +49,9 @@ tracked in git -- too large):
 └── vs_results/                     <- steps 3-6's real output, one dir per stage/conformation
 ```
 
-Exact filenames at every step, plus how to drop MM-GBSA results made on
-another machine into a fresh clone: **`DIRECTORY_STRUCTURE.md`**.
+Exact filenames at every step: **`DIRECTORY_STRUCTURE.md`**.
 
 ## Environment (all steps)
-
-One env for the whole repo: steps 3-6 only need `rdkit`+`numpy`,
-`nested_bm_clustering/` also needs `matplotlib`, `mmgbsa_rescore/` needs
-the rest (gromacs, ambertools, gmx_mmpbsa, acpype, openbabel, mpi4py).
-
 ```
 conda env create -f environment.yml -p ~/ultra-large/envs/post-dock
 conda activate ~/ultra-large/envs/post-dock
@@ -76,8 +64,7 @@ Does a compound's docked pose put a charged nitrogen within 5.0A of Asp116's
 CG carbon? Checks every pose in the SDF (unidock's real default is up to 9
 poses/compound), picks the winner among salt-bridge-qualifying poses by best
 AD4 score, reorders it to the front if it wasn't already there. Molecules
-are never modified (`sanitize=False`, byte-identical pass-through). Full
-methodology/validation notes are in the script's own docstring.
+are never modified (`sanitize=False`, byte-identical pass-through). 
 
 ```
 sbatch sbatch/interaction_filter_fast.sbatch <conformation> <receptor_pdb_path>
@@ -96,8 +83,8 @@ Library Docking," JCIM 2021 (citation + DOI in
 [interaction_filter_references.txt](interaction_filter_references.txt);
 independently reimplemented in `torsion_lib.py`, verified against the
 paper's own reference output before use). A pose is "strained" if
-`total_TEU >= 7.0 OR single_TEU >= 1.8` (the paper's own DUD-E-general
-default -- no 5-HT1A/aminergic-GPCR-specific calibration).
+`total_TEU >= 7.0 OR single_TEU >= 1.8` (the paper's own general
+default).
 
 ```
 sbatch sbatch/strain_filter.sbatch <conformation> --dry_run   # counts only
@@ -111,7 +98,7 @@ Output under `vs_results/strain_filtered_<conf>/`:
 ## `collect_final_hits.py`
 
 Joins the interaction + strain filter reports, ranks by AD4 score, splits
-into multi-SDF files (default 50,000/file, for loading in Maestro).
+into multi-SDF files (default 50,000/file).
 
 ```
 sbatch sbatch/collect_final_hits.sbatch <conformation> [chunk_size]
@@ -124,9 +111,7 @@ Output under `vs_results/final_hits_<conf>/`: `final_hits_<conf>.csv`
 ## Step 5: `apply_score_cutoff.py`
 
 Cuts `collect_final_hits.py`'s already-ranked output to `ad4_score <=
---cutoff` (default -6.0; -7.0 used for the real run above). Pure local
-re-split of already-built files, no cluster job needed:
-
+--cutoff` (-7.0 used for the run above). 
 ```
 python apply_score_cutoff.py --conformation <conf> \
     --vs_results_dir ~/ultra-large/vs_results --cutoff -7.0
