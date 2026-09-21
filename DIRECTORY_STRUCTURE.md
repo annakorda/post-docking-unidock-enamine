@@ -82,25 +82,4 @@ post-docking-unidock-enamine/
             └── mmgbsa_top20_vs_ad4_<conf>.csv
 ```
 
-## Cloning fresh and dropping in your MM-GBSA results
 
-`mmgbsa_rescore/results/` is gitignored, generated fresh by
-`run_mmgbsa_q5.py`/`run_all.sh`, never committed. To bring results made
-on another machine (e.g. faramir) into a fresh clone:
-
-```bash
-git clone <this repo>
-cd post-docking-unidock-enamine/mmgbsa_rescore
-mkdir -p results
-scp -r faramir:/path/to/mmgbsa_rescore/results/* results/
-```
-
-That's the whole handoff: drop the `results/mmgbsa_<conf>/` folders in
-at that exact relative path, and any downstream script reading
-`mmgbsa_rescore/results/mmgbsa_<conf>/mmgbsa_results_<conf>.csv` (the
-next thing to build) finds them without extra configuration.
-
-`nested_bm_clustering/q1/`-`q5/` and their CSVs/plots are real, already-
-generated output, tracked in git (small enough, and it's the actual
-record of what selection was made) -- not something you regenerate on
-every clone unless you're rerunning the pipeline on new upstream data.
