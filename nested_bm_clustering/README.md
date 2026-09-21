@@ -23,6 +23,8 @@ all 3 conformations: **Tc in [0.45, 0.80]**, 8 grid points.
 
 Total clusters per Tc, per conformation, over the Q1 range.
 
+![Q2](q2/q2_visualization.png)
+
 ## Q3: trustworthy (internally consistent)
 
 `std_z < 1.0` (sample std, ddof=1, of a cluster's own member z-scores;
