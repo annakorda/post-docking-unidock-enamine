@@ -140,11 +140,11 @@ within large groups) plus a 5-question pipeline (Q1-Q5, full reasoning in
 `nested_bm_clustering/README.md`) that picks a validated, statistically
 grounded set of compounds for MM-GBSA, not just "top N by AD4 score."
 
-![Q1: Tc range](nested_bm_clustering/q1/q1_visualization.png)
-![Q5: final list](nested_bm_clustering/q5/q5_visualization.png)
-
-Row 7's counts (2,770 / 1,502 / 1,794) come from 1,735 / 959 / 1,053 kept
-clusters (medoid + best scorer each) plus qualifying singletons.
+![Q1](nested_bm_clustering/q1/q1_visualization.png)
+![Q2](nested_bm_clustering/q2/q2_visualization.png)
+![Q3](nested_bm_clustering/q3/q3_visualization.png)
+![Q4](nested_bm_clustering/q4/q4_visualization.png)
+![Q5](nested_bm_clustering/q5/q5_visualization.png)
 
 Output: `q5/q5_mmgbsa_<conf>.sdf` + `q5/q5_mmgbsa_input_list.csv`.
 
