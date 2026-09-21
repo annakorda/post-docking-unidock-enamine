@@ -1,2 +1,9 @@
 __pycache__/
 *.pyc
+
+# real per-step output -- too large/instance-specific to track. See
+# DIRECTORY_STRUCTURE.md for what lives here and where it comes from.
+mmgbsa_rescore/results/
+mmgbsa_rescore/logs/
+logs/*.out
+logs/*.err

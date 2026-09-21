@@ -47,28 +47,28 @@ tracked in git -- too large):
 
 ```
 ~/ultra-large/
-├── post-docking-unidock-enamine/   <- this repo
-├── envs/luna-chem/                 <- conda env for steps 3-5 (see below)
+├── post-docking-unidock-enamine/   <- this repo (steps 7-8's output lives
+│                                       inside it, gitignored -- see below)
+├── envs/post-dock/                 <- conda env for every step (see below)
 ├── receptors/                      <- c1.pdb / c5.pdb / ref1.pdb + AD4 PDBQT builds
 ├── receptor_prep/                  <- gmx-ready receptors for mmgbsa_rescore/
-├── vs_results/                     <- every step's real output, one dir per stage/conformation
-└── analysis_results/               <- downstream characterization output (small, this is what gets downloaded)
+└── vs_results/                     <- steps 3-6's real output, one dir per stage/conformation
 ```
 
-## Environment (steps 3-5)
+Exact filenames at every step, plus how to drop MM-GBSA results made on
+another machine into a fresh clone: **`DIRECTORY_STRUCTURE.md`**.
+
+## Environment (all steps)
+
+One env for the whole repo: steps 3-6 only need `rdkit`+`numpy`,
+`nested_bm_clustering/` also needs `matplotlib`, `mmgbsa_rescore/` needs
+the rest (gromacs, ambertools, gmx_mmpbsa, acpype, openbabel, mpi4py).
 
 ```
-conda env create -f environment.yml -p ~/ultra-large/envs/luna-chem
-conda activate ~/ultra-large/envs/luna-chem
+conda env create -f environment.yml -p ~/ultra-large/envs/post-dock
+conda activate ~/ultra-large/envs/post-dock
 bash install_pip.sh
 ```
-
-Named `luna-chem` for historical reasons (an earlier, since-removed version
-of the interaction filter used LUNA -- see git history) -- the current
-scripts only need RDKit, already in this env.
-
-`mmgbsa_rescore/` uses its own separate `gbsa` env -- see
-`mmgbsa_rescore/README.md`.
 
 ## Step 3: `interaction_filter_fast.py`
 

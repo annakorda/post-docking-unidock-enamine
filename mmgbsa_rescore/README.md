@@ -9,18 +9,8 @@ receptors and `nested_bm_clustering/q5/q5_mmgbsa_<conf>.sdf`.
 
 ## Environment
 
-**Load-bearing gotcha**: a plain `pip install unigbsa` pulls in
-`openbabel-wheel` as a transitive dependency, which silently shadows the
-conda-installed `openbabel` and is ABI-incompatible with it. `obabel` then
-fails on every ligand with `undefined symbol:
-_ZN9OpenBabel8OBPlugin7DisplayERSsPKcS3_`. `install_pip.sh` installs with
-`--no-deps` and repairs it. Don't improvise a plain `pip install` here.
-
-```
-conda env create -f environment.yml -p /path/to/envs/gbsa
-conda activate /path/to/envs/gbsa
-bash install_pip.sh
-```
+Uses the repo-wide `post-dock` env (see root `README.md`), not a separate
+one. Setup and the real openbabel/pip gotcha are documented there.
 
 ## Run
 

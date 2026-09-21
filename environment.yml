@@ -1,33 +1,39 @@
 # Author: Anna Korda
-# Conda-only base for the luna+chemtools env. Python is 3.11, not 3.9
-# (luna-env's original choice) -- dimorphite-dl has no published version
-# supporting <3.10 at all, and luna itself declares Requires-Python
-# >=3.7,<4, so 3.11 was the safe way to satisfy both.
+# One conda env for the whole repo (steps 3-8): interaction/strain
+# filtering and dedup need only rdkit+numpy, nested_bm_clustering/Q1-Q5
+# need rdkit+numpy+matplotlib, mmgbsa_rescore needs the rest (gromacs,
+# ambertools, gmx_mmpbsa, acpype, openbabel, mpi4py). All covered by one
+# env instead of splitting by step.
 #
-# This intentionally has NO pip: section -- luna's own setup.py imports
-# rdkit and networkx at *build* time (undeclared in its own metadata),
-# which breaks under pip's default isolated build sandbox. That needs an
-# explicit --no-build-isolation install in a specific order, which a
-# plain environment.yml pip: section can't express. See install_pip.sh
-# in this same repo for the proven, verified sequence -- run it after
-# creating this env, not instead of it.
+# Versions (python=3.9, gromacs=2025.3, ambertools=23.6, gmx_mmpbsa=1.6.3)
+# captured via `micromamba list` on the machine mmgbsa_rescore was
+# benchmarked on, not a guess.
+#
+# No pip: section here. A plain `pip install unigbsa` pulls in a second,
+# ABI-incompatible openbabel build that silently breaks the conda one
+# above (every ligand's sdf->mol conversion fails). install_pip.sh has
+# the real fix (--no-deps + a documented repair step) -- run it, don't
+# improvise a plain pip install here.
 #
 # Create with:
-#   conda env create -f environment.yml -p <path>/luna-chem
+#   conda env create -f environment.yml -p <path>/post-dock
 # Then, with that env activated:
 #   bash install_pip.sh
-name: luna-chem
+name: post-dock
 channels:
   - conda-forge
 dependencies:
-  - python=3.11
-  - pymol-open-source
+  - python=3.9
+  - gromacs=2025.3
+  - ambertools=23.6
+  - acpype
+  - gmx_mmpbsa=1.6.3
+  - rdkit
   - openbabel
-  - biopython
-  - networkx
   - numpy
   - pandas
   - scipy
   - matplotlib
-  - seaborn
+  - mpi4py
+  - openmpi
   - pip
