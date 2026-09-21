@@ -1,53 +1,42 @@
 # Post-docking-unidock-enamine
 
-Post-docking analysis for the 5-HT1A ultra-large screen (Enamine REAL Space,
-~192M compounds vs. conformations c1/ref1/c5, docked+AD4-redocked on CINECA
-and MareNostrum). 
+Post-docking analysis for the 5-HT1A ultra-large screen 
+**Initial Library:** Enamine REAL Space 69B
+**Docked:** 192M compounds vs. conformations c1/ref1/c5, vina+AD4 on CINECA and MareNostrum). 
+
 ## The filtering funnel, in order
 
 Each step runs on the previous step's own output.
 
-Steps 0-2 run in a separate repo (library prep, before any docking).
+Steps 0-2 run in different repos (for now)
 Steps 3-8 are this repo.
 
 | # | step | script | c1 | ref1 | c5 |
 |---|------|--------|----|------|-----|
 | 0 | Enamine REAL Space, full | (separate repo) | 69,000,000,000 total | | |
-| 1 | + property/PAINS/similarity pre-screen | (separate repo) | **191,904,689** total | | |
-| 2 | top 1% by vina score -> AD4 redock | (separate repo) | **1,919,047** each | | |
-| 3 | + salt-bridge interaction filter (Asp116, 5.0A) | `filtering/interaction_filter_fast.py` | **1,780,753** | **1,042,591** | **1,539,369** |
-| 4 | + strain filter (Total>=7.0 OR Single>=1.8 TEU) | `filtering/strain_filter.py` -> `filtering/collect_final_hits.py` | **117,404** | **56,904** | **96,478** |
-| 5 | + AD4 score cutoff (<=-7.0) | `filtering/apply_score_cutoff.py` | **106,380** | **51,195** | **71,264** |
-| 6 | + dedup stereoisomers/tautomers | `dedup_stereoisomers.py` | **95,468** | **47,790** | **65,364** |
-| 7 | + BM+Tanimoto clustering, Q1-Q5 selection | `nested_bm_clustering/` | **2,770** | **1,502** | **1,794** |
-| 8 | MM-GBSA rescoring (running now) | `mmgbsa_rescore/run_mmgbsa_q5.py` | - | - | - |
+| 1 | Property/PAINS/Similarity pre-screen | (separate repo) | **191,904,689** total | | |
+| 2 | Top 1% by vina score -> AD4 redock | (separate repo) | **1,919,047** each | | |
+| 3 | Salt-bridge interaction filter (Asp116, 5.0A) | `filtering/interaction_filter_fast.py` | **1,780,753** | **1,042,591** | **1,539,369** |
+| 4 | Strain filter (Total>=7.0 OR Single>=1.8 TEU) | `filtering/strain_filter.py` -> `filtering/collect_final_hits.py` | **117,404** | **56,904** | **96,478** |
+| 5 | AD4 score cutoff (<=-7.0) | `filtering/apply_score_cutoff.py` | **106,380** | **51,195** | **71,264** |
+| 6 | Dedup stereoisomers/tautomers | `dedup_stereoisomers.py` | **95,468** | **47,790** | **65,364** |
+| 7 | BM & Tanimoto clustering, Q1-Q5 selection | `nested_bm_clustering/` | **2,770** | **1,502** | **1,794** |
+| 8 | MM-GBSA rescoring | `mmgbsa_rescore/run_mmgbsa_q5.py` | - | - | - |
 
-Totals in rows 0/1 are pool-wide, not per-conformation (the split into
-c1/ref1/c5 happens at row 2's AD4 redock). Step 1's pre-screen (69B ->
-191,904,689): MW 200-500 Da, LogP 0-5, 1-2 positive charge centers, 0
-negative charge centers, <=2 chiral centers, <=10 rotatable bonds, TPSA
-<=140, 20-40 heavy atoms, 2-6 rings, 2-12 heteroatoms, Enamine class S
-only (M and U dropped), PAINS filtered out, Tanimoto <0.35 to all of
-5,250 known GPCRdb actives.
+### Step 1's pre-screen (69B -> 191,904,689): 
 
-Row 4 is the single biggest cut in this repo: strain filtering removes
-~93-95% of what the salt-bridge filter alone passed (e.g. c1:
-1,780,753 -> 117,404).
+MW 200-500 Da, LogP 0-5, 1-2 positive charge centers, 0 negative charge centers, <=2 chiral centers, <=10 rotatable bonds, TPSA <=140, 20-40 heavy atoms, 2-6 rings, 2-12 heteroatoms, Enamine class S only (M and U dropped), PAINS filtered out, Tanimoto <0.35 to 5,250 known GPCRdb actives.
 
-## Where the data lives
+## Data
 
-Everything lives inside this one cloned directory. `vs_results/`,
-`receptors/`, and `envs/` are real data/output, gitignored (too large or
-too instance-specific to track) -- clone the repo, then those three get
-created by running the pipeline (or copied in from wherever the data
-already exists):
+Everything lives inside this one cloned directory. `vs_results/`, `receptors/`, and `envs/` are real data/output, gitignored.  Clone the repo, then those three get created by running the pipeline:
 
 ```
-post-docking-unidock-enamine/       <- clone this
+post-docking-unidock-enamine/      
 ├── envs/post-dock/                 <- conda env (gitignored, you create it)
 ├── receptors/                      <- c1.pdb / c5.pdb / ref1.pdb + AD4 PDBQT builds
 │                                       (gitignored, you provide these)
-├── receptor_prep/                  <- gmx-ready receptors, tracked (small, already here)
+├── receptor_prep/                  <- gmx-ready receptors, tracked 
 ├── vs_results/                     <- steps 3-6's real output (gitignored, created by
 │                                       running the pipeline)
 ├── nested_bm_clustering/           <- step 7, tracked (Q1-Q5 scripts + real output)
@@ -56,7 +45,7 @@ post-docking-unidock-enamine/       <- clone this
 
 Exact filenames at every step: **`DIRECTORY_STRUCTURE.md`**.
 
-## Environment (all steps)
+## Environment
 ```
 conda env create -f environment.yml -p envs/post-dock
 conda activate envs/post-dock
@@ -65,11 +54,7 @@ bash install_pip.sh
 
 ## Step 3: `filtering/interaction_filter_fast.py`
 
-Does a compound's docked pose put a charged nitrogen within 5.0A of Asp116's
-CG carbon? Checks every pose in the SDF (unidock's real default is up to 9
-poses/compound), picks the winner among salt-bridge-qualifying poses by best
-AD4 score, reorders it to the front if it wasn't already there. Molecules
-are never modified (`sanitize=False`, byte-identical pass-through). 
+**Does a compound's docked pose put a charged nitrogen within 5.0A of Asp116's CG carbon?** Checks every pose in the SDF (unidock's real default is up to 9 poses/compound), picks the winner among salt-bridge-qualifying poses by best AD4 score, reorders it to the front if it wasn't already there. Molecules are never modified (`sanitize=False`, byte-identical pass-through). 
 
 ```
 sbatch filtering/sbatch/interaction_filter_fast.sbatch <conformation> <receptor_pdb_path>
@@ -82,7 +67,7 @@ pass/fail/error), `reordered_compounds_<conf>.csv`, `ranked_hits_<conf>.csv`
 
 ## Step 4: `filtering/strain_filter.py`
 
-Filters the interaction filter's winning poses by conformational strain,
+**Filters the interaction filter's winning poses by conformational strain**,
 using Gu, Smith, Yang, Irwin, Shoichet, "Ligand Strain Energy in Large
 Library Docking," JCIM 2021 (citation + DOI in
 [filtering/interaction_filter_references.txt](filtering/interaction_filter_references.txt);
@@ -102,7 +87,7 @@ Output under `vs_results/strain_filtered_<conf>/`:
 
 ## `filtering/collect_final_hits.py`
 
-Joins the interaction + strain filter reports, ranks by AD4 score, splits
+**Joins the interaction & strain filter reports, ranks by AD4 score**, splits
 into multi-SDF files (default 50,000/file).
 
 ```
@@ -128,8 +113,8 @@ above, re-split into `_partNN.sdf` files.
 ## Step 6: `dedup_stereoisomers/`
 
 Many rows in step 5's output are the same 2D compound, enumerated as
-different stereoisomers/tautomers by the original library build. Keeps
-only the best-AD4-scoring version of each.
+different stereoisomers/tautomers by the original library build. **Keeps
+only the best-AD4-scoring version of each.**
 
 ```
 python dedup_stereoisomers/dedup_stereoisomers.py --conformation <conf> \
@@ -143,10 +128,10 @@ value (`vs_results/dedup`), not at the top-level `vs_results/`.
 
 ## Step 7: `nested_bm_clustering/`
 
-Two-pass clustering (Bemis-Murcko scaffold groups, then Tanimoto/Butina
-within large groups) plus a 5-question pipeline (Q1-Q5, full reasoning in
-`nested_bm_clustering/README.md`) that picks a validated, statistically
-grounded set of compounds for MM-GBSA, not just "top N by AD4 score."
+**Two-pass clustering (Bemis-Murcko scaffold groups, then Tanimoto/Butina
+within large groups) plus a 5-question pipeline** (Q1-Q5, full reasoning in
+`nested_bm_clustering/README.md`) that **picks a validated, statistically
+grounded set of compounds for MM-GBSA**, not just "top N by AD4 score."
 
 ![Q5](nested_bm_clustering/q5/q5_visualization.png)
 
@@ -154,7 +139,7 @@ Output: `q5/q5_mmgbsa_<conf>.sdf` + `q5/q5_mmgbsa_input_list.csv`.
 
 ## Step 8: `mmgbsa_rescore/`
 
-MM-GBSA rescoring (Uni-GBSA, single-point energy-minimized pose + GB
+**MM-GBSA rescoring** (Uni-GBSA, single-point energy-minimized pose + GB
 solvation) of step 7's curated list. Needs `receptor_prep/`'s gmx-ready
 receptors. Full usage, environment setup, and real benchmark numbers in
 `mmgbsa_rescore/README.md`.
