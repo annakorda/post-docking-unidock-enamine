@@ -13,11 +13,11 @@ result + the receptor PDB into one small tar for visual review.
 Molecules are never touched beyond pure text pose-block reordering, same
 guarantee as interaction_filter_fast.py itself.
 
-Usage:
-    python extract_review_set.py --conformation c5 \\
-        --vs_results_dir ~/ultra-large/vs_results \\
-        --receptor_pdb ~/ultra-large/receptors/c5.pdb \\
-        --n 10 --out_dir ~/ultra-large/test_review_c5
+Usage (run from the repo root):
+    python filtering/extract_review_set.py --conformation c5 \\
+        --vs_results_dir vs_results \\
+        --receptor_pdb receptors/c5.pdb \\
+        --n 10 --out_dir test_review_c5
 """
 import argparse
 import csv

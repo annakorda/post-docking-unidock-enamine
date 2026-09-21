@@ -2,7 +2,7 @@
 """
 Author: Anna Korda
 
-Two-pass clustering, replacing ecfp4_clustering.py's single flat Butina pass:
+Two-pass clustering:
 
 Pass 1 -- Bemis-Murcko, deterministic, no threshold. Every compound's generic
 scaffold (ring systems + linkers only, atom types abstracted away via RDKit's
