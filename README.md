@@ -23,7 +23,16 @@ Steps 3-8 are this repo.
 | 5 | AD4 score cutoff (<=-7.0) | `filtering/apply_score_cutoff.py` | **106,380** | **51,195** | **71,264** |
 | 6 | Dedup stereoisomers/tautomers | `dedup_stereoisomers.py` | **95,468** | **47,790** | **65,364** |
 | 7 | BM & Tanimoto clustering, Q1-Q5 selection | `nested_bm_clustering/` | **2,770** | **1,502** | **1,794** |
-| 8 | MM-GBSA rescoring | `mmgbsa_rescore/run_mmgbsa_q5.py` | - | - | - |
+| 8 | MM-GBSA rescoring | `mmgbsa_rescore/run_mmgbsa_q5.py` | **2,770** | **1,502** | **1,794** |
+| 9 | Best MM-GBSA scorer per cluster | `hit_selection/01_cluster_rescore/` | TBD | TBD | TBD |
+| 10 | Nitrile geometric check (vs. 8FYL) | `hit_selection/02_nitrile_check/` | TBD | TBD | TBD |
+| 11 | ChEMBL214 novelty check (Tc<0.35) | `hit_selection/03_novelty_chembl/` | TBD | TBD | TBD |
+| 12 | ADME/Tox (BOILED-Egg, CNS MPO, hERG) | `hit_selection/04_admet/` | TBD | TBD | TBD |
+| 13 | Final rank (top 30/conf, 90 total) | `hit_selection/05_final_rank/` | 30 | 30 | 30 |
+
+Steps 9-14: full reasoning in `hit_selection/README.md`. Runs separately
+per conformation throughout -- c1/ref1/c5 keep their own survivors and
+their own final ranking, never merged into one shared list.
 
 ### Step 1's pre-screen (69B -> 191,904,689): 
 

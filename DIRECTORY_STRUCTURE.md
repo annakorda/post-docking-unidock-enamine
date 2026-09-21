@@ -104,3 +104,19 @@ cd post-docking-unidock-enamine/mmgbsa_rescore
 mkdir -p results
 scp -r faramir:/path/to/mmgbsa_rescore/results/* results/
 ```
+
+## Steps 9-14, tracked: `hit_selection/`
+
+```
+hit_selection/
+├── 01_cluster_rescore/       cluster_best_<conf>.csv
+├── 02_nitrile_check/
+│   ├── structures/8FYL.pdb   YOU provide this (downloaded PDB)
+│   └── nitrile_geometry_<conf>.csv
+├── 03_novelty_chembl/        novelty_<conf>.csv
+├── 04_admet/                 admet_<conf>.csv
+├── 05_final_rank/            final_ranked_<conf>.csv
+└── 06_visual_inspection/     manual review output, no fixed naming yet
+```
+
+Full per-step reasoning: `hit_selection/README.md`.
