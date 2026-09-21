@@ -15,8 +15,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 HERE = Path(__file__).parent
-DEDUP_DIR = Path("/home/annie/Desktop/alphavs/revision_2026/ultra-large-results/dedup")
 NESTED_DIR = HERE.parent
+DEDUP_DIR = NESTED_DIR.parent / "vs_results" / "dedup"  # repo_root/vs_results/dedup
 CONFS = ["c1", "ref1", "c5"]
 COLORS = {"c1": "#3D7A8C", "ref1": "#C97B3D", "c5": "#7B5EA7"}
 TC = "0.60"

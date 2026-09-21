@@ -18,7 +18,7 @@ guarantee as every other script in this pipeline.
 
 Usage:
     python apply_score_cutoff.py --conformation c1 \\
-        --vs_results_dir /users/gpcr/annak/ultra-large/vs_results \\
+        --vs_results_dir vs_results \\
         --cutoff -6.0 --chunk_size 50000
 """
 import argparse

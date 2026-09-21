@@ -36,25 +36,30 @@ Row 4 is the single biggest cut in this repo: strain filtering removes
 
 ## Where the data lives
 
-Cloned inside `~/ultra-large/`, alongside the data it operates on (not
-tracked in git -- too large):
+Everything lives inside this one cloned directory. `vs_results/`,
+`receptors/`, and `envs/` are real data/output, gitignored (too large or
+too instance-specific to track) -- clone the repo, then those three get
+created by running the pipeline (or copied in from wherever the data
+already exists):
 
 ```
-~/ultra-large/
-├── post-docking-unidock-enamine/   <- this repo (steps 7-8's output lives
-│                                       inside it, gitignored -- see below)
-├── envs/post-dock/                 <- conda env for every step (see below)
+post-docking-unidock-enamine/       <- clone this
+├── envs/post-dock/                 <- conda env (gitignored, you create it)
 ├── receptors/                      <- c1.pdb / c5.pdb / ref1.pdb + AD4 PDBQT builds
-├── receptor_prep/                  <- gmx-ready receptors for mmgbsa_rescore/
-└── vs_results/                     <- steps 3-6's real output, one dir per stage/conformation
+│                                       (gitignored, you provide these)
+├── receptor_prep/                  <- gmx-ready receptors, tracked (small, already here)
+├── vs_results/                     <- steps 3-6's real output (gitignored, created by
+│                                       running the pipeline)
+├── nested_bm_clustering/           <- step 7, tracked (Q1-Q5 scripts + real output)
+└── mmgbsa_rescore/                 <- step 8, tracked (scripts); results/ gitignored
 ```
 
 Exact filenames at every step: **`DIRECTORY_STRUCTURE.md`**.
 
 ## Environment (all steps)
 ```
-conda env create -f environment.yml -p ~/ultra-large/envs/post-dock
-conda activate ~/ultra-large/envs/post-dock
+conda env create -f environment.yml -p envs/post-dock
+conda activate envs/post-dock
 bash install_pip.sh
 ```
 
@@ -114,7 +119,7 @@ Cuts `collect_final_hits.py`'s already-ranked output to `ad4_score <=
 --cutoff` (-7.0 used for the run above). 
 ```
 python apply_score_cutoff.py --conformation <conf> \
-    --vs_results_dir ~/ultra-large/vs_results --cutoff -7.0
+    --vs_results_dir vs_results --cutoff -7.0
 ```
 
 Output under `vs_results/final_hits_<conf>_cutoff<C>/`: same columns as
@@ -128,10 +133,13 @@ only the best-AD4-scoring version of each.
 
 ```
 python dedup_stereoisomers/dedup_stereoisomers.py --conformation <conf> \
-    --vs_results_dir ~/ultra-large/vs_results --cutoff -7.0
+    --vs_results_dir vs_results \
+    --out_dir vs_results/dedup --cutoff -7.0
 ```
 
-Output under `<out_dir>/final_hits_<conf>_cutoff<C>_dedup/`.
+Output under `vs_results/dedup/final_hits_<conf>_cutoff<C>_dedup/`. Step 7
+(below) needs its own `--vs_results_dir` pointed at this `--out_dir`
+value (`vs_results/dedup`), not at the top-level `vs_results/`.
 
 ## Step 7: `nested_bm_clustering/`
 
@@ -140,10 +148,6 @@ within large groups) plus a 5-question pipeline (Q1-Q5, full reasoning in
 `nested_bm_clustering/README.md`) that picks a validated, statistically
 grounded set of compounds for MM-GBSA, not just "top N by AD4 score."
 
-![Q1](nested_bm_clustering/q1/q1_visualization.png)
-![Q2](nested_bm_clustering/q2/q2_visualization.png)
-![Q3](nested_bm_clustering/q3/q3_visualization.png)
-![Q4](nested_bm_clustering/q4/q4_visualization.png)
 ![Q5](nested_bm_clustering/q5/q5_visualization.png)
 
 Output: `q5/q5_mmgbsa_<conf>.sdf` + `q5/q5_mmgbsa_input_list.csv`.

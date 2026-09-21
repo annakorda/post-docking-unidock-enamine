@@ -22,10 +22,10 @@ fi
 
 module load Miniconda3/202601
 eval "$(conda shell.bash hook)"
-conda activate /users/gpcr/annak/ultra-large/envs/luna-chem
+conda activate "$SLURM_SUBMIT_DIR/envs/post-dock"
 
 python collect_final_hits.py \
     --conformation "$CONFORMATION" \
-    --vs_results_dir "/users/gpcr/annak/ultra-large/vs_results" \
+    --vs_results_dir "vs_results" \
     --chunk_size "$CHUNK_SIZE" \
     --workers "$SLURM_CPUS_PER_TASK"

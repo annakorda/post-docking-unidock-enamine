@@ -21,9 +21,9 @@ project's large-file-count scripts.
 Usage:
     python interaction_filter_fast.py \\
         --conformation c5 \\
-        --poses_dir /users/gpcr/annak/ultra-large/vs_results/ad4_redock_c5 \\
-        --receptor_pdb /users/gpcr/annak/ultra-large/receptors/c5.pdb \\
-        --out_dir /users/gpcr/annak/ultra-large/vs_results \\
+        --poses_dir vs_results/ad4_redock_c5 \\
+        --receptor_pdb receptors/c5.pdb \\
+        --out_dir vs_results \\
         --workers 64
 """
 import argparse

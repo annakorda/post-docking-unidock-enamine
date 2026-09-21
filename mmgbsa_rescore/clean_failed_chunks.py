@@ -13,7 +13,7 @@ Chunk files with NO failures are left alone (real, valid completed work,
 no need to redo it).
 
 Usage:
-    python clean_failed_chunks.py --out_dir /users/gpcr/annak/ultra-large/analysis_results/mmgbsa_rescore --conformation c1
+    python clean_failed_chunks.py --out_dir results --conformation c1
 """
 import argparse
 import csv

@@ -20,10 +20,10 @@ final_hits ranking). Writes a new CSV (re-ranked by ad4_score ascending) and
 the corresponding SDF poses, pure text-level splice -- same bytes as the
 original blocks, never touched, never opened with a chemistry library.
 
-Usage:
-    python dedup_stereoisomers.py --conformation c1 \\
-        --vs_results_dir /users/gpcr/annak/ultra-large/vs_results \\
-        --out_dir /users/gpcr/annak/ultra-large/vs_results/dedup \\
+Usage (run from the repo root):
+    python dedup_stereoisomers/dedup_stereoisomers.py --conformation c1 \\
+        --vs_results_dir vs_results \\
+        --out_dir vs_results/dedup \\
         --cutoff -7.0
 """
 import argparse

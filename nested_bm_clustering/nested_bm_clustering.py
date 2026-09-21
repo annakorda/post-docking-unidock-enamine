@@ -28,10 +28,10 @@ the deduped set from dedup_stereoisomers.py -- that's the real intended
 input here, redundant stereoisomers/tautomers should already be removed
 before this runs, not re-discovered as "BM group size 1 vs many").
 
-Usage:
-    python nested_bm_clustering.py --conformation c1 \\
-        --vs_results_dir /home/annie/Desktop/alphavs/revision_2026/ultra-large-results/dedup \\
-        --out_dir /home/annie/Desktop/alphavs/revision_2026/analysis/.../nested_bm_clustering \\
+Usage (run from the repo root):
+    python nested_bm_clustering/nested_bm_clustering.py --conformation c1 \\
+        --vs_results_dir vs_results/dedup \\
+        --out_dir nested_bm_clustering \\
         --cutoff -7.0 --thresholds 0.90,...,0.35 --min_group_size 10 --workers 8
 """
 import argparse

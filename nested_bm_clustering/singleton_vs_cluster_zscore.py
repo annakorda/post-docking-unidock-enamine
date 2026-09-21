@@ -19,7 +19,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 HERE = Path(__file__).parent
-DEDUP_DIR = Path("/home/annie/Desktop/alphavs/revision_2026/ultra-large-results/dedup")
+DEDUP_DIR = HERE.parent / "vs_results" / "dedup"  # repo_root/vs_results/dedup
 CONFS = ["c1", "ref1", "c5"]
 TC = "0.60"
 

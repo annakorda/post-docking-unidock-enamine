@@ -33,7 +33,7 @@ Same chunked/resumable/parallel pattern as interaction_filter_fast.py.
 
 Usage:
     python strain_filter.py --conformation c5 \\
-        --vs_results_dir /users/gpcr/annak/ultra-large/vs_results \\
+        --vs_results_dir vs_results \\
         --torsion_lib_xml data/TL_2.1_VERSION_6.xml \\
         --workers 32 --dry_run
 """

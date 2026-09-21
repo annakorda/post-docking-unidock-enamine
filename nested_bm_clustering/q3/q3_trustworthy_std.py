@@ -2,15 +2,17 @@
 """
 Author: Anna Korda
 
-Q3, final: trustworthy = std_z < 0.5 (sample std, ddof=1, of a cluster's
-own member z-scores). Deliberately NOT a significance test -- a chi-squared
-variance test was tried and rejected: verified on real data that it favors
-large clusters for the same reason a mean-based significance test does
-(more members = more power to prove a given spread is "significantly"
-low), regardless of the cluster's actual spread. Confirmed: 10-15% of
-chi2-passing clusters had std_z>=0.5 (loose by eye, passed on n alone,
-counts 7-101) while ~70% of genuinely tight (std_z<0.3) 2-3-member
-clusters failed the test outright, purely from lack of power.
+Q3, final: trustworthy = std_z < STD_CUTOFF (sample std, ddof=1, of a
+cluster's own member z-scores; STD_CUTOFF=1.0, ~0.6-0.7 kcal/mol real AD4
+spread). Deliberately NOT a significance test -- a chi-squared variance
+test was tried and rejected: verified on real data that it favors large
+clusters for the same reason a mean-based significance test does (more
+members = more power to prove a given spread is "significantly" low),
+regardless of the cluster's actual spread. Confirmed at an earlier
+candidate cutoff (0.5): 10-15% of chi2-passing clusters had std_z>=0.5
+(loose by eye, passed on n alone, counts 7-101) while ~70% of genuinely
+tight (std_z<0.3) 2-3-member clusters failed the test outright, purely
+from lack of power.
 
 Trustworthiness is a descriptive property (how much do these members
 actually disagree), not an estimation problem -- unlike "good" (Q4), where
@@ -25,7 +27,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 NESTED_DIR = HERE.parent
-DEDUP_DIR = Path("/home/annie/Desktop/alphavs/revision_2026/ultra-large-results/dedup")
+DEDUP_DIR = NESTED_DIR.parent / "vs_results" / "dedup"  # repo_root/vs_results/dedup, dedup_stereoisomers.py's --out_dir
 CONFS = ["c1", "ref1", "c5"]
 STD_CUTOFF = 1.0  # ~0.6-0.7 kcal/mol, matched to AD4's commonly-cited noise floor
 

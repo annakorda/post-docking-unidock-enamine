@@ -23,11 +23,11 @@ fi
 
 module load Miniconda3/202601
 eval "$(conda shell.bash hook)"
-conda activate /users/gpcr/annak/ultra-large/envs/luna-chem
+conda activate "$SLURM_SUBMIT_DIR/envs/post-dock"
 
 python strain_filter.py \
     --conformation "$CONFORMATION" \
-    --vs_results_dir "/users/gpcr/annak/ultra-large/vs_results" \
+    --vs_results_dir "vs_results" \
     --torsion_lib_xml "data/TL_2.1_VERSION_6.xml" \
     --workers "$SLURM_CPUS_PER_TASK" \
     $EXTRA_ARGS

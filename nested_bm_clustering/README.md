@@ -66,8 +66,10 @@ directly into `mmgbsa_rescore/run_mmgbsa_q5.py`.
 
 ## Running it end to end
 
+Run from inside `nested_bm_clustering/` (paths below are relative to that):
+
 ```
-python nested_bm_clustering.py --conformation c1 --vs_results_dir <dedup output> --out_dir . --thresholds 0.90,...,0.35
+python nested_bm_clustering.py --conformation c1 --vs_results_dir ../vs_results/dedup --out_dir . --thresholds 0.90,...,0.35
 python q1/q1_derive_tc_range.py
 python q2/q2_cluster_counts.py
 python q3/q3_trustworthy_std.py

@@ -13,7 +13,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 NESTED_DIR = HERE.parent
-DEDUP_DIR = Path("/home/annie/Desktop/alphavs/revision_2026/ultra-large-results/dedup")
+DEDUP_DIR = NESTED_DIR.parent / "vs_results" / "dedup"  # repo_root/vs_results/dedup, dedup_stereoisomers.py's --out_dir
 CONFS = ["c1", "ref1", "c5"]
 TC = "0.60"
 Z_CUTOFF = -3.0

@@ -1,64 +1,65 @@
 # Directory structure: exact names, in and out, per step
 
-Two kinds of storage in this pipeline:
+Everything lives inside the cloned repo directory. Two kinds of content:
 
-1. **External** (`~/ultra-large/`, not tracked in git): steps 3-6's real
-   output. Too large to commit, one flat dir per step/conformation.
-2. **Repo-relative** (tracked structure, gitignored contents): steps 7-8's
-   output. Small enough to sit next to the code that made it.
-
-## External: `~/ultra-large/`
+1. **Tracked** (in git): code, small real deliverables (`nested_bm_clustering/`'s
+   Q1-Q5 output, `receptor_prep/`).
+2. **Gitignored** (real, but too large/instance-specific to commit):
+   `envs/`, `receptors/`, `vs_results/`, `mmgbsa_rescore/results/`,
+   `mmgbsa_rescore/logs/`.
 
 ```
-~/ultra-large/
-├── envs/post-dock/                          conda env (see root README.md)
+post-docking-unidock-enamine/                 <- clone this, cd into it, run everything from here
+├── envs/post-dock/                           gitignored, you create this (conda env)
 ├── receptors/
-│   ├── c1.pdb  ref1.pdb  c5.pdb              raw receptors, YOU provide these
+│   ├── c1.pdb  ref1.pdb  c5.pdb               gitignored, YOU provide these (raw receptors)
 │   └── ...AD4 PDBQT builds
-├── receptor_prep/
+├── receptor_prep/                             tracked, already here
 │   └── c1_gmxready.pdb  ref1_gmxready.pdb  c5_gmxready.pdb
-│                                              gmx-ready receptors -- already in
-│                                              this repo's receptor_prep/, copy
-│                                              or symlink from there
-└── vs_results/
-    ├── ad4_redock_<conf>/                    YOU provide this (steps 0-2's
-    │   └── <compound_id>.sdf                 output, separate repo). One SDF
-    │                                          per compound, filename = compound_id,
-    │                                          up to 9 poses inside each.
-    ├── interactions_passed_<conf>/           step 3 output
+└── vs_results/                                gitignored, created by running steps 3-6
+    ├── ad4_redock_<conf>/                     YOU provide this (steps 0-2's output,
+    │   └── <compound_id>.sdf                  separate repo). One SDF per compound,
+    │                                           filename = compound_id, up to 9 poses inside.
+    ├── interactions_passed_<conf>/            step 3 output
     │   ├── interactions_passed_<conf>.tar.gz
     │   ├── interaction_filter_report_<conf>.csv
     │   ├── reordered_compounds_<conf>.csv
     │   ├── ranked_hits_<conf>.csv
     │   └── run_summary_<conf>.txt
-    ├── strain_filtered_<conf>/               step 4 output
+    ├── strain_filtered_<conf>/                step 4 output
     │   ├── strain_filtered_<conf>.tar.gz
     │   ├── strain_filter_report_<conf>.csv
     │   └── run_summary_<conf>.txt
-    ├── final_hits_<conf>/                    collect_final_hits.py output
+    ├── final_hits_<conf>/                     collect_final_hits.py output
     │   ├── final_hits_<conf>.csv
     │   ├── final_hits_<conf>_part01.sdf, _part02.sdf, ...
     │   └── score_range_report_<conf>.txt
-    ├── final_hits_<conf>_cutoff<C>/          step 5 output (C = e.g. -7.0 -> "-7")
+    ├── final_hits_<conf>_cutoff<C>/           step 5 output (C = e.g. -7.0 -> "-7")
     │   ├── final_hits_<conf>_cutoff<C>.csv
     │   └── final_hits_<conf>_cutoff<C>_part01.sdf, ...
-    └── final_hits_<conf>_cutoff<C>_dedup/    step 6 output
-        ├── final_hits_<conf>_cutoff<C>_dedup.csv
-        └── final_hits_<conf>_cutoff<C>_dedup.sdf   (single file, not split)
+    └── dedup/                                 step 6's SEPARATE --out_dir
+        └── final_hits_<conf>_cutoff<C>_dedup/
+            ├── final_hits_<conf>_cutoff<C>_dedup.csv
+            └── final_hits_<conf>_cutoff<C>_dedup.sdf   (single file, not split)
 ```
 
-Every step 3-6 script takes `--vs_results_dir ~/ultra-large/vs_results`
-and finds/creates its own named subfolder there. Nothing to configure
-beyond that one path.
+Steps 3-5 all take one `--vs_results_dir vs_results` and find/create their
+own named subfolder there. Step 6 (`dedup_stereoisomers.py`) is different:
+it takes `--vs_results_dir` (reads step 5's output from there) AND a
+separate `--out_dir` (writes here instead, conventionally
+`vs_results/dedup`). Step 7 (`nested_bm_clustering.py`)'s own
+`--vs_results_dir` must then point at step 6's `--out_dir` value
+(`vs_results/dedup`), not at the top-level `vs_results/` -- it's looking
+for `final_hits_<conf>_cutoff<C>_dedup/` as a direct child of whatever
+path you pass it.
 
-## Repo-relative: inside the cloned repo
+## Steps 7-8, tracked
 
 ```
 post-docking-unidock-enamine/
 ├── environment.yml, install_pip.sh          the post-dock env
 ├── nested_bm_clustering/
-│   ├── nested_bm_clustering.py              step 7a: reads
-│   │                                        ~/ultra-large/vs_results/
+│   ├── nested_bm_clustering.py              step 7a: reads vs_results/dedup/
 │   │                                        final_hits_<conf>_cutoff<C>_dedup/,
 │   │                                        writes here:
 │   ├── bm_group_summary_<conf>.csv
@@ -66,7 +67,9 @@ post-docking-unidock-enamine/
 │   ├── nested_cluster_assignment_<conf>_<threshold>.csv   (x12 per conf)
 │   ├── nested_cluster_summary_<conf>.csv
 │   ├── q1/ ... q4/, q_singletons/           step 7b: Q1-Q5, each script's
-│   │                                        own CSV + visualization
+│   │                                        own CSV + visualization, and its
+│   │                                        own DEDUP_DIR derived automatically
+│   │                                        as vs_results/dedup relative to the repo
 │   └── q5/
 │       ├── q5_mmgbsa_c1.sdf, _ref1.sdf, _c5.sdf   <- what step 8 reads
 │       ├── q5_mmgbsa_input_list.csv
@@ -82,4 +85,15 @@ post-docking-unidock-enamine/
             └── mmgbsa_top20_vs_ad4_<conf>.csv
 ```
 
+## Cloning fresh and dropping in your MM-GBSA results
 
+`mmgbsa_rescore/results/` is gitignored, generated fresh by
+`run_mmgbsa_q5.py`/`run_all.sh`. To bring results made on another machine
+(e.g. faramir) into a fresh clone:
+
+```bash
+git clone <this repo>
+cd post-docking-unidock-enamine/mmgbsa_rescore
+mkdir -p results
+scp -r faramir:/path/to/mmgbsa_rescore/results/* results/
+```

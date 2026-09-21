@@ -33,7 +33,7 @@ rank order with no extra sorting step).
 
 Usage:
     python collect_final_hits.py --conformation c1 \\
-        --vs_results_dir /users/gpcr/annak/ultra-large/vs_results \\
+        --vs_results_dir vs_results \\
         --chunk_size 50000 --workers 32
 """
 import argparse
