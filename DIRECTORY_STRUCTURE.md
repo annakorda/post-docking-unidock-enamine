@@ -10,6 +10,13 @@ Everything lives inside the cloned repo directory. Two kinds of content:
 
 ```
 post-docking-unidock-enamine/                 <- clone this, cd into it, run everything from here
+├── filtering/                                tracked -- steps 3-5's code
+│   ├── interaction_filter_fast.py, strain_filter.py, collect_final_hits.py,
+│   │   apply_score_cutoff.py, torsion_lib.py, extract_review_set.py,
+│   │   interaction_filter_references.txt
+│   ├── data/TL_2.1_VERSION_6.xml             torsion library, used by strain_filter.py
+│   ├── sbatch/*.sbatch                       submission wrappers for steps 3-4-collect
+│   └── logs/                                 gitignored contents (*.out/*.err), dir tracked
 ├── envs/post-dock/                           gitignored, you create this (conda env)
 ├── receptors/
 │   ├── c1.pdb  ref1.pdb  c5.pdb               gitignored, YOU provide these (raw receptors)
@@ -30,7 +37,7 @@ post-docking-unidock-enamine/                 <- clone this, cd into it, run eve
     │   ├── strain_filtered_<conf>.tar.gz
     │   ├── strain_filter_report_<conf>.csv
     │   └── run_summary_<conf>.txt
-    ├── final_hits_<conf>/                     collect_final_hits.py output
+    ├── final_hits_<conf>/                     filtering/collect_final_hits.py output
     │   ├── final_hits_<conf>.csv
     │   ├── final_hits_<conf>_part01.sdf, _part02.sdf, ...
     │   └── score_range_report_<conf>.txt

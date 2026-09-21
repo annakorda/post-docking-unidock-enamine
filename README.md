@@ -15,9 +15,9 @@ Steps 3-8 are this repo.
 | 0 | Enamine REAL Space, full | (separate repo) | 69,000,000,000 total | | |
 | 1 | + property/PAINS/similarity pre-screen | (separate repo) | **191,904,689** total | | |
 | 2 | top 1% by vina score -> AD4 redock | (separate repo) | **1,919,047** each | | |
-| 3 | + salt-bridge interaction filter (Asp116, 5.0A) | `interaction_filter_fast.py` | **1,780,753** | **1,042,591** | **1,539,369** |
-| 4 | + strain filter (Total>=7.0 OR Single>=1.8 TEU) | `strain_filter.py` -> `collect_final_hits.py` | **117,404** | **56,904** | **96,478** |
-| 5 | + AD4 score cutoff (<=-7.0) | `apply_score_cutoff.py` | **106,380** | **51,195** | **71,264** |
+| 3 | + salt-bridge interaction filter (Asp116, 5.0A) | `filtering/interaction_filter_fast.py` | **1,780,753** | **1,042,591** | **1,539,369** |
+| 4 | + strain filter (Total>=7.0 OR Single>=1.8 TEU) | `filtering/strain_filter.py` -> `filtering/collect_final_hits.py` | **117,404** | **56,904** | **96,478** |
+| 5 | + AD4 score cutoff (<=-7.0) | `filtering/apply_score_cutoff.py` | **106,380** | **51,195** | **71,264** |
 | 6 | + dedup stereoisomers/tautomers | `dedup_stereoisomers.py` | **95,468** | **47,790** | **65,364** |
 | 7 | + BM+Tanimoto clustering, Q1-Q5 selection | `nested_bm_clustering/` | **2,770** | **1,502** | **1,794** |
 | 8 | MM-GBSA rescoring (running now) | `mmgbsa_rescore/run_mmgbsa_q5.py` | - | - | - |
@@ -63,7 +63,7 @@ conda activate envs/post-dock
 bash install_pip.sh
 ```
 
-## Step 3: `interaction_filter_fast.py`
+## Step 3: `filtering/interaction_filter_fast.py`
 
 Does a compound's docked pose put a charged nitrogen within 5.0A of Asp116's
 CG carbon? Checks every pose in the SDF (unidock's real default is up to 9
@@ -72,7 +72,7 @@ AD4 score, reorders it to the front if it wasn't already there. Molecules
 are never modified (`sanitize=False`, byte-identical pass-through). 
 
 ```
-sbatch sbatch/interaction_filter_fast.sbatch <conformation> <receptor_pdb_path>
+sbatch filtering/sbatch/interaction_filter_fast.sbatch <conformation> <receptor_pdb_path>
 ```
 
 Output under `vs_results/interactions_passed_<conf>/`: the passing SDFs
@@ -80,45 +80,45 @@ Output under `vs_results/interactions_passed_<conf>/`: the passing SDFs
 pass/fail/error), `reordered_compounds_<conf>.csv`, `ranked_hits_<conf>.csv`
 (best-score-first), `run_summary_<conf>.txt`.
 
-## Step 4: `strain_filter.py`
+## Step 4: `filtering/strain_filter.py`
 
 Filters the interaction filter's winning poses by conformational strain,
 using Gu, Smith, Yang, Irwin, Shoichet, "Ligand Strain Energy in Large
 Library Docking," JCIM 2021 (citation + DOI in
-[interaction_filter_references.txt](interaction_filter_references.txt);
-independently reimplemented in `torsion_lib.py`, verified against the
-paper's own reference output before use). A pose is "strained" if
-`total_TEU >= 7.0 OR single_TEU >= 1.8` (the paper's own general
-default).
+[filtering/interaction_filter_references.txt](filtering/interaction_filter_references.txt);
+independently reimplemented in `filtering/torsion_lib.py`, verified
+against the paper's own reference output before use). A pose is
+"strained" if `total_TEU >= 7.0 OR single_TEU >= 1.8` (the paper's own
+general default).
 
 ```
-sbatch sbatch/strain_filter.sbatch <conformation> --dry_run   # counts only
-sbatch sbatch/strain_filter.sbatch <conformation>              # writes survivors tar
+sbatch filtering/sbatch/strain_filter.sbatch <conformation> --dry_run   # counts only
+sbatch filtering/sbatch/strain_filter.sbatch <conformation>              # writes survivors tar
 ```
 
 Output under `vs_results/strain_filtered_<conf>/`:
 `strain_filter_report_<conf>.csv`, `run_summary_<conf>.txt`,
 `strain_filtered_<conf>.tar.gz`.
 
-## `collect_final_hits.py`
+## `filtering/collect_final_hits.py`
 
 Joins the interaction + strain filter reports, ranks by AD4 score, splits
 into multi-SDF files (default 50,000/file).
 
 ```
-sbatch sbatch/collect_final_hits.sbatch <conformation> [chunk_size]
+sbatch filtering/sbatch/collect_final_hits.sbatch <conformation> [chunk_size]
 ```
 
 Output under `vs_results/final_hits_<conf>/`: `final_hits_<conf>.csv`
 (rank, compound_id, ad4_score, total_TEU, single_TEU),
 `score_range_report_<conf>.txt`, `final_hits_<conf>_partNN.sdf`.
 
-## Step 5: `apply_score_cutoff.py`
+## Step 5: `filtering/apply_score_cutoff.py`
 
 Cuts `collect_final_hits.py`'s already-ranked output to `ad4_score <=
 --cutoff` (-7.0 used for the run above). 
 ```
-python apply_score_cutoff.py --conformation <conf> \
+python filtering/apply_score_cutoff.py --conformation <conf> \
     --vs_results_dir vs_results --cutoff -7.0
 ```
 
