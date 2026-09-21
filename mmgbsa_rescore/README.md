@@ -2,19 +2,49 @@
 
 Author: Anna Korda
 
-MM-GBSA rescoring of each conformation's final hit set (Uni-GBSA,
-single-point energy-minimized pose + GB solvation -- `mode=em`, not MD,
-matching Uni-GBSA's own validated default). Runs on top of
-`receptor_prep/`'s gmx-ready receptors and `apply_score_cutoff.py`'s already-
-built `final_hits_<conf>_cutoff<C>.csv` + `_partNN.sdf`.
+MM-GBSA rescoring of `nested_bm_clustering/`'s curated Q5 hit list (Uni-GBSA,
+single-point energy-minimized pose plus GB solvation: `mode=em`, Uni-GBSA's
+own validated default, not MD). Runs on `receptor_prep/`'s gmx-ready
+receptors and `nested_bm_clustering/q5/q5_mmgbsa_<conf>.sdf`.
 
-## Real benchmark, and why this only scores the top 1%
+## Environment
 
-Per-compound cost is genuinely higher on shiva than a fast local machine --
-measured directly (not estimated): **~65-72s/compound on shiva** at
-low concurrency vs ~25-32s locally, for the identical code and receptor.
-On top of that, real concurrency-scaling cost was measured directly on shiva
-(same node, same code, only worker count changed):
+**Load-bearing gotcha**: a plain `pip install unigbsa` pulls in
+`openbabel-wheel` as a transitive dependency, which silently shadows the
+conda-installed `openbabel` and is ABI-incompatible with it. `obabel` then
+fails on every ligand with `undefined symbol:
+_ZN9OpenBabel8OBPlugin7DisplayERSsPKcS3_`. `install_pip.sh` installs with
+`--no-deps` and repairs it. Don't improvise a plain `pip install` here.
+
+```
+conda env create -f environment.yml -p /path/to/envs/gbsa
+conda activate /path/to/envs/gbsa
+bash install_pip.sh
+```
+
+## Run
+
+```
+bash run_all.sh <workers> <scratch_root>
+```
+
+Runs c1/ref1/c5 sequentially, each parallelized internally across
+`--workers` processes. Chunked and resumable: safe to interrupt/rerun,
+already-completed chunks skip instantly. `<scratch_root>` should be fast
+local storage (`/dev/shm` if there's enough RAM); each compound writes
+~7 files/~3.7MB to its own throwaway dir, deleted right after scoring.
+
+Or run one conformation directly:
+```
+python run_mmgbsa_q5.py --conformation c1 \
+    --sdf ../nested_bm_clustering/q5/q5_mmgbsa_c1.sdf \
+    --receptor ../receptor_prep/c1_gmxready.pdb \
+    --out_dir results --workers 10 --scratch_root /dev/shm
+```
+
+Measured per-compound cost: ~25-32s on a fast local machine, ~65-72s on a
+shared cluster at low concurrency, with gradual (not catastrophic) further
+slowdown as concurrency rises:
 
 | workers | mean s/compound | slowdown |
 |---|---|---|
@@ -23,128 +53,51 @@ On top of that, real concurrency-scaling cost was measured directly on shiva
 | 8 | 90.7 | 1.29x |
 | 16 | 120.8 | 1.72x |
 
-That's a real, gradual, measured curve, not a guess -- it also means an
-earlier attempt to run this at 64 workers correctly stalled hard (many
-`gmx_MMPBSA`/`unigbsa-pipeline` processes stuck in D/disk-wait state,
-accumulating only ~20-30s of CPU time after 45-70+ min of wall-clock
-existence). At this real cost, the full ~106k-230k compound sets aren't
-practical here.
+Two cheap mitigations for that degradation, both wired into `run_all.sh`:
+point `--scratch_root` at genuinely fast/local storage (disk contention was
+the main suspected cause), and `OMPI_MCA_btl=self` plus a `/dev/shm`-based
+OpenMPI session dir (unigbsa does a per-process OpenMPI singleton-init
+internally via `mpi4py`, a second, smaller contributing factor).
 
-**Fix: only score the top `--top_pct` by AD4 rank** (default 1%, a
-real contiguous prefix of the already-rank-ordered
-`final_hits_<conf>_cutoff<C>.csv` -- no re-sorting needed). That's a small,
-bounded, real set per conformation: c1 ~1,064, ref1 ~512, c5 ~713 -- already
-the most interesting compounds (best AD4-ranked), and at even the slower
-16-worker rate (1.72x), c1's ~1,064 compounds is ~1,064 x 72s x 1.72 / 16
-=~ 2.3 hours, not days.
+## Output
 
-`--workers` defaults to 16 (not tied to `--cpus-per-task=32`) as a real,
-measured middle ground -- tune via the 4th CLI arg if a given run still
-looks slow (check with `ps aux | grep unigbsa-pipeline` on the compute node
-and watch whether CPU time tracks wall-clock time). `OMPI_MCA_btl=self` and
-moving OpenMPI's own session directory to `/dev/shm` are also set (harmless,
-possibly-contributing mitigations for the real per-process OpenMPI
-singleton-init `unigbsa` does internally via `mpi4py`), though the measured
-curve above shows the degradation is gradual rather than a hard wall, so
-these aren't confirmed as the primary fix on their own.
+Under `results/mmgbsa_<conf>/`:
+- `mmgbsa_results_<conf>.csv`: every compound that succeeded, ranked by
+  `mmgbsa_dg` (most negative first), with `ad4_score`, `cluster_id`,
+  `role` (medoid/best_scorer/medoid+best_scorer/singleton_outlier), and
+  `source` (cluster/singleton) carried through from step 7.
+- `mmgbsa_failed_<conf>.csv`: anything that errored or timed out, same
+  columns, real error message.
+- `mmgbsa_top20_vs_ad4_<conf>.csv`: top 20 MM-GBSA hits with their AD4
+  rank within the Q5 set, a quick sanity check that MM-GBSA isn't
+  reordering toward compounds AD4/clustering already considered weak.
 
-Each compound writes ~7 files / ~3.7MB (without `--verbose`) to its own
-throwaway working directory, deleted immediately after its result is parsed.
-Use `--scratch_root` to point this at genuinely node-local storage (`/dev/shm`
-in the sbatch scripts).
+Live progress is logged per compound, not just per chunk, with a running
+ok/fail count and an explicit flag if the failure rate exceeds 30% after
+the first 20+ compounds. A systemic problem (wrong receptor, broken env)
+shows up within minutes, not only after the full run finishes.
 
-## Environment
+## `clean_failed_chunks.py`
 
-**Real, load-bearing gotcha, found the hard way**: a plain
-`pip install unigbsa` pulls in `openbabel-wheel` as a transitive dependency,
-which silently shadows the conda-installed `openbabel` above it and is
-ABI-incompatible with it -- `obabel` then fails with `undefined symbol:
-_ZN9OpenBabel8OBPlugin7DisplayERSsPKcS3_` on every single ligand (100% failure
-rate, not a flaky/occasional thing). Root cause: conda's `openbabel` package
-here provides the CLI binary + C++ library but **not** an importable Python
-`openbabel` module (needed by Uni-GBSA's net-charge step) -- that only comes
-from the pip wheel, which also overwrites the conda CLI binary on install.
-`install_pip.sh` installs `unigbsa`/`lickit` with `--no-deps`, adds
-`openbabel-wheel` explicitly for the Python module, then force-reinstalls the
-conda `openbabel` package to restore its native CLI binary (which lives at a
-different file than the Python module, so this repair doesn't undo the
-Python import). Verified both `obabel -V` (native, conda) and
-`python -c "from openbabel import openbabel"` (pip wheel) work together
-afterward, and re-ran real compounds successfully.
+Deletes any `mmgbsa_part_*.csv` chunk file that contains a real failure (a
+row with a non-empty `error` column). Run before resubmitting so those
+compounds get genuinely recomputed instead of resumability trusting stale
+failures/timeouts from an earlier run. Chunks with no failures are left
+alone.
 
-```
-conda env create -f environment.yml -p /users/gpcr/annak/ultra-large/envs/gbsa
-conda activate /users/gpcr/annak/ultra-large/envs/gbsa
-bash install_pip.sh
-```
+## Open items
 
-## Run
-
-```
-sbatch mmgbsa_rescore/mmgbsa_rescore.sbatch c1
-sbatch mmgbsa_rescore/mmgbsa_rescore.sbatch ref1
-sbatch mmgbsa_rescore/mmgbsa_rescore.sbatch c5
-```
-
-Top 1% by AD4 rank (default, override with a 2nd CLI arg), 16 workers
-(default, override with a 4th CLI arg), `--partition=long`, resumable
-(skips chunks whose output already exists), logs real periodic progress
-with ETA.
-
-Output per conformation, under `analysis_results/mmgbsa_rescore/mmgbsa_<conf>/`:
-- `mmgbsa_results_<conf>.csv` -- every compound that succeeded, ranked by
-  `mmgbsa_dg` (most negative first), **with everything already known about
-  it**: `ad4_score`, `total_TEU`, `single_TEU` alongside the MM-GBSA number --
-  one CSV, not several. Only the final delta G is kept from Uni-GBSA's own
-  output; its full per-term energy decomposition (van der Waals,
-  electrostatic, polar/non-polar solvation, ...) is discarded per compound,
-  not accumulated anywhere.
-- `mmgbsa_failed_<conf>.csv` -- same columns, for anything that errored or
-  timed out, with the real error message.
-- `mmgbsa_top20_vs_ad4_<conf>.csv` -- the top 20 MM-GBSA hits with their AD4
-  score and AD4-only rank (within the full set), for a quick sanity check:
-  do the MM-GBSA-best compounds also look reasonable by AD4, or is MM-GBSA
-  picking things AD4 considered bad? (Real small-scale test: top-10 MM-GBSA
-  hits all had AD4 ranks within 1-10 too -- a reordering within the already-
-  good set, not noise.)
-
-## `mmgbsa_save_top_complexes.py` (run after the above, per conformation)
-
-`mmgbsa_rescore.py` keeps only the delta G per compound -- its minimized
-complex is deleted right after scoring. This script re-runs unigbsa-pipeline
-for just the top `--top_pct` percent (default 1%) of the already-ranked
-`mmgbsa_results_<conf>.csv` and this time keeps `complex.pdb`. **Note**: now
-that `mmgbsa_rescore.py` itself already only scores the top 1% by AD4 rank,
-this script's default top 1% is 1% *of that* (~10-11 compounds/conformation)
--- pass a higher `--top_pct` (e.g. 50 or 100) if you want structures for
-more of the already-small MM-GBSA-scored set.
-
-```
-sbatch mmgbsa_rescore/mmgbsa_save_top_complexes.sbatch c1
-sbatch mmgbsa_rescore/mmgbsa_save_top_complexes.sbatch ref1
-sbatch mmgbsa_rescore/mmgbsa_save_top_complexes.sbatch c5
-```
-
-Output under `analysis_results/mmgbsa_rescore/mmgbsa_<conf>/top_complexes/`:
-`complexes/<compound_id>_complex.pdb` (one per selected compound) and
-`top_complexes_manifest_<conf>.csv` (rank, compound_id, mmgbsa_dg, ad4_score,
-path to its complex.pdb).
-
-## Combining AD4 + MM-GBSA into one score (open item)
-
-Not yet implemented -- deliberately, since Anna asked to run the real thing
-first and check the results before deciding this. Real literature finding
-for when that's next: combining raw score *values* (even Z-scored) is a
-documented pitfall (incompatible scales/units between a docking score and a
-free energy). The literature-backed alternative is rank-based consensus --
-either plain rank-averaging, or Exponential Consensus Ranking (ECR; Palacio-
-Rodriguez, Lans, Cavasotto, Cossio, *Sci. Rep.* 2019,
-10.1038/s41598-019-41594-3), which converts each method's score to a rank
-first, then combines via `p(r) = (1/sigma) * exp(-r/sigma)` summed across
-methods -- shown to outperform Z-score/raw averaging and to be robust to its
-one free parameter (sigma). Foundational consensus-scoring concept: Charifson
-et al., *J. Med. Chem.* 1999, PMID 10602695. No published example found doing
-exactly "AD4 + MM-GBSA on an ultra-large REAL-space screen" as one blended
-score -- the pattern in that literature (e.g. Lyu et al. 2019-style funnels)
-is MM-GBSA as a downstream re-ranking/filter stage on an already-shortlisted
-set, which is also what this script's own place in the pipeline already is.
+- **Saving top complexes** (`complex.pdb` for the best final scorers, not
+  just the delta-G) isn't wired up for the curated Q5 list yet. Each
+  compound's minimized complex is currently deleted right after scoring.
+- **Combining AD4 + MM-GBSA into one score**: not yet implemented,
+  deliberately. Run the real thing first and check results before
+  deciding. Combining raw score *values* (even Z-scored) across a docking
+  score and a free energy is a documented pitfall (incompatible
+  scales/units). The literature-backed alternative is rank-based
+  consensus: plain rank-averaging, or Exponential Consensus Ranking
+  (Palacio-Rodriguez, Lans, Cavasotto, Cossio, *Sci. Rep.* 2019,
+  10.1038/s41598-019-41594-3), which converts each method's score to a
+  rank first, then combines via `p(r) = (1/sigma) * exp(-r/sigma)` summed
+  across methods. Foundational consensus-scoring concept: Charifson et
+  al., *J. Med. Chem.* 1999, PMID 10602695.

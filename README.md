@@ -11,39 +11,34 @@ Each step runs on the previous step's own output and never re-opens an
 earlier step's decision (e.g. strain filtering never re-picks which pose
 "won" -- that was already decided by the interaction filter).
 
-**Upstream (separate repo, not this one)** -- library prep, before any
-docking:
-
-| # | step | c1 | ref1 | c5 |
-|---|------|----|------|-----|
-| 0 | Enamine REAL Space, full | 69,000,000,000 total (not per-conformation) | | |
-| 1 | + property/PAINS/similarity pre-screen (see filters below) | **191,904,689** total (not per-conformation) | | |
-| 2 | top 1% by vina score -> AD4 redock | **1,919,047** each (1% of 191,904,689) | | |
-
-Step 1's pre-screen (69B -> 191,904,689): MW 200-500 Da, LogP 0-5, 1-2
-positive charge centers, 0 negative charge centers, <=2 chiral centers,
-<=10 rotatable bonds, TPSA <=140, 20-40 heavy atoms, 2-6 rings, 2-12
-heteroatoms, Enamine class S only (M and U dropped), PAINS filtered out,
-Tanimoto <0.35 to all of 5,250 known GPCRdb actives (kept only if
-dissimilar to every one of them).
-
-**This repo** -- everything from here on:
+Steps 0-2 run in a separate repo (library prep, before any docking).
+Steps 3-8 are this repo.
 
 | # | step | script | c1 | ref1 | c5 |
 |---|------|--------|----|------|-----|
-| 3 | salt-bridge interaction filter (Asp116, 5.0A) | `interaction_filter_fast.py` | **1,780,753** | **1,042,591** | **1,539,369** |
+| 0 | Enamine REAL Space, full | (separate repo) | 69,000,000,000 total | | |
+| 1 | + property/PAINS/similarity pre-screen | (separate repo) | **191,904,689** total | | |
+| 2 | top 1% by vina score -> AD4 redock | (separate repo) | **1,919,047** each | | |
+| 3 | + salt-bridge interaction filter (Asp116, 5.0A) | `interaction_filter_fast.py` | **1,780,753** | **1,042,591** | **1,539,369** |
 | 4 | + strain filter (Total>=7.0 OR Single>=1.8 TEU) | `strain_filter.py` -> `collect_final_hits.py` | **117,404** | **56,904** | **96,478** |
 | 5 | + AD4 score cutoff (<=-7.0) | `apply_score_cutoff.py` | **106,380** | **51,195** | **71,264** |
+| 6 | + dedup stereoisomers/tautomers | `dedup_stereoisomers.py` | **95,468** | **47,790** | **65,364** |
+| 7 | + BM+Tanimoto clustering, Q1-Q5 selection | `nested_bm_clustering/` | **2,770** | **1,502** | **1,794** |
+| 8 | MM-GBSA rescoring (running now) | `mmgbsa_rescore/run_mmgbsa_q5.py` | - | - | - |
 
-Step 4 is the single biggest cut in this repo: strain filtering removes
+Totals in rows 0/1 are pool-wide, not per-conformation (the split into
+c1/ref1/c5 happens at row 2's AD4 redock). Step 1's pre-screen (69B ->
+191,904,689): MW 200-500 Da, LogP 0-5, 1-2 positive charge centers, 0
+negative charge centers, <=2 chiral centers, <=10 rotatable bonds, TPSA
+<=140, 20-40 heavy atoms, 2-6 rings, 2-12 heteroatoms, Enamine class S
+only (M and U dropped), PAINS filtered out, Tanimoto <0.35 to all of
+5,250 known GPCRdb actives.
+
+Row 4 is the single biggest cut in this repo: strain filtering removes
 ~93-95% of what the salt-bridge filter alone passed (e.g. c1:
 1,780,753 -> 117,404), consistent with the paper's own finding that a
 high-scoring docked pose can get that score *by* adopting a strained
 conformation.
-
-Everything past step 5 (ECFP4 clustering, cross-conformation overlap, SNN
-similarity, MM-GBSA rescoring) is **characterization** of the final hit set,
-not further filtering -- see each folder's own README.
 
 ## Where the data lives
 
@@ -140,19 +135,45 @@ python apply_score_cutoff.py --conformation <conf> \
 Output under `vs_results/final_hits_<conf>_cutoff<C>/`: same columns as
 above, re-split into `_partNN.sdf` files.
 
-## Downstream characterization (not filtering)
+## Step 6: `dedup_stereoisomers/`
 
-Each runs on step 5's output and writes to `analysis_results/<name>/`:
+Many rows in step 5's output are the same 2D compound, enumerated as
+different stereoisomers/tautomers by the original library build. Keeps
+only the best-AD4-scoring version of each.
 
-- `ecfp4_clustering/` -- Taylor-Butina clustering at several ECFP4 Tanimoto
-  thresholds, per conformation.
-- `hit_overlap/` -- cross-conformation compound-ID overlap (non-symmetric %
-  matrix + raw counts).
-- `snn_similarity/` -- Similarity-to-Nearest-Neighbor (MOSES benchmark
-  metric) between conformations' hit sets.
-- `triple_overlap/` -- the compounds present in all 3 conformations (exact
-  set intersection + their poses).
-- `mmgbsa_rescore/` -- MM-GBSA rescoring via Uni-GBSA. Needs
-  `receptor_prep/`'s gmx-ready receptors first.
+```
+python dedup_stereoisomers/dedup_stereoisomers.py --conformation <conf> \
+    --vs_results_dir ~/ultra-large/vs_results --cutoff -7.0
+```
 
-Each has its own README with real benchmark numbers and usage.
+Output under `<out_dir>/final_hits_<conf>_cutoff<C>_dedup/`.
+
+## Step 7: `nested_bm_clustering/`
+
+Two-pass clustering (Bemis-Murcko scaffold groups, then Tanimoto/Butina
+within large groups) plus a 5-question pipeline (Q1-Q5, full reasoning in
+`nested_bm_clustering/README.md`) that picks a validated, statistically
+grounded set of compounds for MM-GBSA, not just "top N by AD4 score."
+
+![Q1: Tc range](nested_bm_clustering/q1/q1_visualization.png)
+![Q5: final list](nested_bm_clustering/q5/q5_visualization.png)
+
+Row 7's counts (2,770 / 1,502 / 1,794) come from 1,735 / 959 / 1,053 kept
+clusters (medoid + best scorer each) plus qualifying singletons.
+
+Output: `q5/q5_mmgbsa_<conf>.sdf` + `q5/q5_mmgbsa_input_list.csv`.
+
+## Step 8: `mmgbsa_rescore/`
+
+MM-GBSA rescoring (Uni-GBSA, single-point energy-minimized pose + GB
+solvation) of step 7's curated list. Needs `receptor_prep/`'s gmx-ready
+receptors. Full usage, environment setup, and real benchmark numbers in
+`mmgbsa_rescore/README.md`.
+
+```
+bash mmgbsa_rescore/run_all.sh <workers> <scratch_root>
+```
+
+Output under `mmgbsa_rescore/results/mmgbsa_<conf>/`:
+`mmgbsa_results_<conf>.csv` (ranked by `mmgbsa_dg`, with `ad4_score`,
+`cluster_id`, `role`, `source` carried through from step 7).
